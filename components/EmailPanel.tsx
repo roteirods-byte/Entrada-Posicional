@@ -1,69 +1,63 @@
 import React, { useEffect, useState } from 'react';
 
-type Status = { type: 'success' | 'error'; message: string } | null;
+const STORAGE_KEY = 'autotrader_email_config_v1';
 
-const STORAGE_KEY = 'autotrader_email_config';
+interface EmailConfig {
+  from: string;
+  password: string;
+  to: string;
+}
 
 const EmailPanel: React.FC = () => {
-  const [principal, setPrincipal] = useState('');
-  const [senha, setSenha] = useState('');
-  const [destino, setDestino] = useState('');
+  const [from, setFrom] = useState('');
+  const [password, setPassword] = useState('');
+  const [to, setTo] = useState('');
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<Status>(null);
 
-  // Carrega dados salvos no navegador
+  // Carregar configurações salvas no navegador
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.principal) setPrincipal(data.principal);
-      if (data.senha) setSenha(data.senha);
-      if (data.destino) setDestino(data.destino);
-    } catch (err) {
-      console.error('Erro ao ler config de e-mail do storage:', err);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: EmailConfig = JSON.parse(raw);
+        setFrom(parsed.from ?? '');
+        setPassword(parsed.password ?? '');
+        setTo(parsed.to ?? '');
+      }
+    } catch (e) {
+      console.error('Erro ao carregar configuração de e-mail', e);
     }
   }, []);
 
-  const handleSave = async () => {
+  const handleTestAndSave = () => {
     setStatus(null);
 
-    // Validações simples de tela
-    if (!principal || !senha || !destino) {
-      setStatus({
-        type: 'error',
-        message: 'Preencha todos os campos antes de salvar.',
-      });
+    if (!from || !password || !to) {
+      setStatus({ ok: false, message: 'Preencha todos os campos.' });
       return;
     }
 
-    if (!principal.includes('@') || !destino.includes('@')) {
-      setStatus({
-        type: 'error',
-        message: 'Verifique os endereços de e-mail digitados.',
-      });
+    if (!from.includes('@') || !to.includes('@')) {
+      setStatus({ ok: false, message: 'Verifique os e-mails informados.' });
       return;
     }
 
     setSaving(true);
-
     try {
-      // Salva apenas no navegador (por enquanto)
-      const payload = { principal, senha, destino };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      const config: EmailConfig = { from, password, to };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 
-      // ⬇️ Aqui, numa próxima etapa, vamos plugar um endpoint Python
-      //     para mandar um e-mail de teste de verdade.
       setStatus({
-        type: 'success',
+        ok: true,
         message:
-          'Configurações salvas neste navegador. O envio real dos alertas continua sendo feito pela automação Python.',
+          'Configurações salvas no navegador. O envio real será feito pela automação do servidor quando estiver conectada.',
       });
-    } catch (err) {
-      console.error('Erro ao salvar config de e-mail:', err);
+    } catch (e) {
+      console.error(e);
       setStatus({
-        type: 'error',
-        message: 'Erro ao salvar as configurações de e-mail.',
+        ok: false,
+        message: 'Não foi possível salvar as configurações.',
       });
     } finally {
       setSaving(false);
@@ -71,76 +65,74 @@ const EmailPanel: React.FC = () => {
   };
 
   return (
-    <section className="w-full max-w-5xl mx-auto bg-[#032734] border border-[#0f3b4a] rounded-2xl p-6 sm:p-8 shadow-xl">
-      <h2 className="text-2xl sm:text-3xl font-semibold text-[#ff7b1b] mb-6">
-        E-MAIL
-      </h2>
+    <div className="w-full">
+      <h2 className="text-xl font-bold text-[#ff7b1b] mb-4">E-MAIL</h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 items-end">
-        {/* Principal */}
-        <div className="lg:col-span-1">
-          <label className="block text-sm font-medium text-[#ff7b1b] mb-2">
-            Principal (remetente)
-          </label>
-          <input
-            type="email"
-            value={principal}
-            onChange={(e) => setPrincipal(e.target.value)}
-            placeholder="seu-email@gmail.com"
-            className="w-full rounded-lg px-3 py-2 bg-[#021b25] text-[#e7edf3] border border-[#0f3b4a] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
-          />
+      <div className="bg-[#0b2533] border border-gray-700 rounded-lg p-6 max-w-4xl">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="flex flex-col">
+            <label className="text-sm text-[#ff7b1b] mb-1">
+              Principal (remetente)
+            </label>
+            <input
+              type="email"
+              className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3]"
+              placeholder="seu-email@gmail.com"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col">
+            <label className="text-sm text-[#ff7b1b] mb-1">
+              Senha (App Password)
+            </label>
+            <input
+              type="password"
+              className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3]"
+              placeholder="************"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col">
+            <label className="text-sm text-[#ff7b1b] mb-1">
+              Envio (destinatário)
+            </label>
+            <input
+              type="email"
+              className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3]"
+              placeholder="destino@email.com"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </div>
         </div>
 
-        {/* Senha */}
-        <div className="lg:col-span-1">
-          <label className="block text-sm font-medium text-[#ff7b1b] mb-2">
-            Senha (App Password)
-          </label>
-          <input
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            className="w-full rounded-lg px-3 py-2 bg-[#021b25] text-[#e7edf3] border border-[#0f3b4a] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
-          />
-        </div>
-
-        {/* Destino */}
-        <div className="lg:col-span-1">
-          <label className="block text-sm font-medium text-[#ff7b1b] mb-2">
-            Envio (destinatário)
-          </label>
-          <input
-            type="email"
-            value={destino}
-            onChange={(e) => setDestino(e.target.value)}
-            placeholder="destino@email.com"
-            className="w-full rounded-lg px-3 py-2 bg-[#021b25] text-[#e7edf3] border border-[#0f3b4a] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
-          />
-        </div>
-
-        {/* Botão */}
-        <div className="lg:col-span-1 flex justify-start lg:justify-end">
+        <div className="flex justify-end">
           <button
-            type="button"
-            onClick={handleSave}
+            onClick={handleTestAndSave}
             disabled={saving}
-            className="w-full lg:w-auto px-6 py-3 rounded-lg bg-[#ff7b1b] text-[#02131d] font-semibold hover:bg-[#ffa24f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="bg-[#ff7b1b] hover:bg-[#ff9b46] disabled:opacity-70 text-sm font-semibold text-[#041019] px-6 py-2 rounded-md"
           >
             {saving ? 'Salvando...' : 'TESTAR/SALVAR'}
           </button>
         </div>
-      </div>
 
-      {status && (
-        <p
-          className={`mt-6 text-sm sm:text-base font-medium ${
-            status.type === 'success' ? 'text-green-400' : 'text-red-400'
-          }`}
-        >
-          {status.message}
-        </p>
-      )}
-    </section>
+        {status && (
+          <p
+            className={`mt-4 text-sm px-3 py-2 rounded-md ${
+              status.ok
+                ? 'bg-green-900 text-green-300'
+                : 'bg-red-900 text-red-300'
+            }`}
+          >
+            {status.message}
+          </p>
+        )}
+      </div>
+    </div>
   );
 };
 
