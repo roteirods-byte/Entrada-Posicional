@@ -1,161 +1,278 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ExitData } from '../types';
-import { getExitData, addExitData, removeExitData } from '../api/mock';
+// src/components/ExitPanel.tsx
+import React, { useEffect, useState } from 'react';
 
 interface ExitPanelProps {
   coins: string[];
-  setCoins: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
+type Side = 'LONG' | 'SHORT';
+type Mode = 'SWING' | 'POSICIONAL';
+
+interface Operation {
+  id: number;
+  par: string;
+  side: Side;
+  modo: Mode;
+  entrada: number;
+  alvo: number;
+  precoAtual: number;
+  pnlPct: number;
+  situacao: 'ABERTA' | 'FECHADA';
+  data: string;
+  hora: string;
+  alav: number;
+}
+
+const STORAGE_KEY = 'autotrader_exit_ops_v1';
+
 const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
-  const [exitData, setExitData] = useState<ExitData[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  const [newOp, setNewOp] = useState({
-    par: coins[0] || 'BTC',
-    side: 'LONG' as 'LONG' | 'SHORT',
-    modo: 'SWING',
+  const [ops, setOps] = useState<Operation[]>([]);
+  const [form, setForm] = useState({
+    par: coins[0] ?? '',
+    side: 'LONG' as Side,
+    modo: 'SWING' as Mode,
     entrada: '',
-    alav: '5',
-    gain_pct: '2',
-    stop_pct: '1',
+    alvo: '',
+    alav: '',
   });
 
-  const fetchExitData = useCallback(() => {
-    setExitData(getExitData());
+  // Carrega operações salvas (localStorage)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: Operation[] = JSON.parse(raw);
+        setOps(parsed);
+      }
+    } catch (e) {
+      console.error('Erro ao ler operações salvas', e);
+    }
   }, []);
 
+  // Salva sempre que mudar
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => {
-      fetchExitData();
-      setLoading(false);
-    }, 300);
-  }, [fetchExitData]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
+  }, [ops]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      let alertInfo: ExitData | null = null;
-      setExitData(prevData => {
-        const newData = prevData.map(d => {
-          if (d.situacao !== 'ABERTA') return d;
-          
-          const priceChange = (Math.random() - 0.5) * d.entrada * 0.01;
-          const newPrice = d.precoAtual + priceChange;
-          
-          const pnl = d.side === 'LONG'
-            ? ((newPrice - d.entrada) / d.entrada) * 100 * d.alav
-            : ((d.entrada - newPrice) / d.entrada) * 100 * d.alav;
+  const handleChange = (field: keyof typeof form, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
 
-          let situacao = d.situacao;
-          if ((d.side === 'LONG' && newPrice >= d.alvo) || (d.side === 'SHORT' && newPrice <= d.alvo)) {
-              situacao = 'ALVO ATINGIDO';
-              alertInfo = { ...d, precoAtual: newPrice, pnl, situacao };
-          }
-            
-          return { ...d, precoAtual: newPrice, pnl, situacao };
-        });
-        
-        if (alertInfo) {
-            alert(`HORA DE SAIR: ${alertInfo.par} - PREÇO ATUAL ${alertInfo.precoAtual.toFixed(4)} - ALVO ${alertInfo.alvo.toFixed(4)} - PNL % ${alertInfo.pnl.toFixed(2)} - ${new Date().toLocaleDateString('pt-BR')} - ${new Date().toLocaleTimeString('pt-BR')}`);
-        }
-        
-        return newData;
-      });
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const calcularPnl = (side: Side, entrada: number, precoAtual: number, alav: number) => {
+    if (!entrada || !precoAtual || !alav) return 0;
+    const bruto =
+      side === 'LONG'
+        ? (precoAtual - entrada) / entrada
+        : (entrada - precoAtual) / entrada;
+    return +(bruto * alav * 100).toFixed(2);
+  };
 
+  const handleAdd = () => {
+    const entrada = parseFloat(form.entrada.replace(',', '.'));
+    const alvo = parseFloat(form.alvo.replace(',', '.'));
+    const alav = parseFloat(form.alav.replace(',', '.'));
 
-  const handleAddOperation = () => {
-    const entradaNum = parseFloat(newOp.entrada);
-    const gainPctNum = parseFloat(newOp.gain_pct);
-
-    if (isNaN(entradaNum) || isNaN(gainPctNum)) {
-        alert("Por favor, preencha os campos de entrada e ganho com valores numéricos.");
-        return;
-    }
-    
-    let alvo: number;
-    if (newOp.side === 'LONG') {
-        alvo = entradaNum * (1 + gainPctNum / 100);
-    } else { // SHORT
-        alvo = entradaNum * (1 - gainPctNum / 100);
+    if (!form.par || isNaN(entrada) || isNaN(alvo) || isNaN(alav)) {
+      alert('Preencha PAR, Entrada, Alvo e Alav.');
+      return;
     }
 
-    const newOperation = {
-      par: newOp.par,
-      side: newOp.side,
-      modo: newOp.modo,
-      entrada: entradaNum,
-      alav: parseInt(newOp.alav, 10),
-      alvo: alvo,
+    const now = new Date();
+    const data = now.toISOString().slice(0, 10);
+    const hora = now.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // Ainda não temos feed de preço: começa com preço atual = entrada
+    const precoAtual = entrada;
+    const pnlPct = calcularPnl(form.side, entrada, precoAtual, alav);
+
+    const op: Operation = {
+      id: Date.now(),
+      par: form.par,
+      side: form.side,
+      modo: form.modo,
+      entrada,
+      alvo,
+      precoAtual,
+      pnlPct,
+      situacao: 'ABERTA',
+      data,
+      hora,
+      alav,
     };
-    
-    addExitData(newOperation);
-    fetchExitData();
+
+    setOps(prev => [...prev, op]);
+    setForm(prev => ({ ...prev, entrada: '', alvo: '', alav: '' }));
   };
 
-  const handleRemoveOperation = (id: number) => {
-    removeExitData(id);
-    fetchExitData();
+  const handleDelete = (id: number) => {
+    setOps(prev => prev.filter(op => op.id !== id));
   };
 
-  if (loading) {
-    return <div className="text-center text-lg text-gray-300">Carregando dados de saída...</div>;
-  }
-  
   return (
-    <div className="w-full space-y-8">
-      <div className="p-6 rounded-lg bg-[#0a202c] border border-gray-700">
-        <h3 className="text-xl font-bold text-[#ff7b1b] mb-6">MONITORAMENTO DE SAÍDA</h3>
-        <div className="flex items-end gap-x-4 flex-wrap">
-            <select value={newOp.par} onChange={e => setNewOp({...newOp, par: e.target.value})} className="bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2">
-                {coins.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={newOp.side} onChange={e => setNewOp({...newOp, side: e.target.value as 'LONG' | 'SHORT'})} className="bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2">
-                <option value="LONG">LONG</option>
-                <option value="SHORT">SHORT</option>
-            </select>
-             <select value={newOp.modo} onChange={e => setNewOp({...newOp, modo: e.target.value})} className="bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2">
-                <option value="SWING">SWING</option>
-                <option value="POSICIONAL">POSICIONAL</option>
-            </select>
-            <input type="number" placeholder="Entrada" value={newOp.entrada} onChange={e => setNewOp({...newOp, entrada: e.target.value})} className="w-28 bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2" />
-            <input type="number" placeholder="Gain %" value={newOp.gain_pct} onChange={e => setNewOp({...newOp, gain_pct: e.target.value})} className="w-24 bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2" />
-            <input type="number" placeholder="Stop %" value={newOp.stop_pct} onChange={e => setNewOp({...newOp, stop_pct: e.target.value})} className="w-24 bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2" />
-            <input type="number" placeholder="Alav" value={newOp.alav} onChange={e => setNewOp({...newOp, alav: e.target.value})} className="w-20 bg-[#1e3a4c] border border-gray-600 rounded-md px-3 py-2" />
+    <div className="w-full">
+      <h2 className="text-xl font-bold text-[#ff7b1b] mb-4">
+        MONITORAMENTO DE SAÍDA
+      </h2>
 
-            <button onClick={handleAddOperation} className="px-6 py-2 bg-[#1e3a4c] text-[#ff7b1b] font-semibold rounded-md border border-[#ff7b1b] hover:bg-[#ff7b1b] hover:text-white transition-colors duration-200">Adicionar Operação</button>
-        </div>
+      {/* LINHA DE CADASTRO (sem GANHO / STOP) */}
+      <div className="flex flex-wrap gap-3 mb-6 items-center">
+        {/* PAR */}
+        <select
+          value={form.par}
+          onChange={e => handleChange('par', e.target.value)}
+          className="min-w-[100px] px-3 py-2 rounded-md bg-[#0b2533] border border-gray-600 text-[#e7edf3] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
+        >
+          {coins.map(c => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+
+        {/* SIDE (LONG verde, SHORT vermelho) */}
+        <select
+          value={form.side}
+          onChange={e => handleChange('side', e.target.value as Side)}
+          className={`min-w-[110px] px-3 py-2 rounded-md bg-[#0b2533] border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#ff7b1b] ${
+            form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
+          }`}
+        >
+          <option value="LONG">LONG</option>
+          <option value="SHORT">SHORT</option>
+        </select>
+
+        {/* MODO */}
+        <select
+          value={form.modo}
+          onChange={e => handleChange('modo', e.target.value as Mode)}
+          className="min-w-[130px] px-3 py-2 rounded-md bg-[#0b2533] border border-gray-600 text-[#e7edf3] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
+        >
+          <option value="SWING">SWING</option>
+          <option value="POSICIONAL">POSICIONAL</option>
+        </select>
+
+        {/* ENTRADA */}
+        <input
+          type="number"
+          step="0.0001"
+          placeholder="Entrada"
+          value={form.entrada}
+          onChange={e => handleChange('entrada', e.target.value)}
+          className="w-24 px-3 py-2 rounded-md bg-[#0b2533] border border-gray-600 text-[#e7edf3] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
+        />
+
+        {/* ALVO */}
+        <input
+          type="number"
+          step="0.0001"
+          placeholder="Alvo"
+          value={form.alvo}
+          onChange={e => handleChange('alvo', e.target.value)}
+          className="w-24 px-3 py-2 rounded-md bg-[#0b2533] border border-gray-600 text-[#e7edf3] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
+        />
+
+        {/* ALAVANCAGEM */}
+        <input
+          type="number"
+          step="1"
+          placeholder="Alav"
+          value={form.alav}
+          onChange={e => handleChange('alav', e.target.value)}
+          className="w-20 px-3 py-2 rounded-md bg-[#0b2533] border border-gray-600 text-[#e7edf3] focus:outline-none focus:ring-2 focus:ring-[#ff7b1b]"
+        />
+
+        <button
+          onClick={handleAdd}
+          className="px-4 py-2 rounded-md bg-[#ff7b1b] text-[#0b2533] font-semibold hover:bg-[#ffa74d] transition-colors"
+        >
+          Adicionar Operação
+        </button>
       </div>
 
+      {/* TABELA (sem colunas GANHO / STOP) */}
       <div className="overflow-x-auto rounded-lg border border-gray-700">
         <table className="min-w-full bg-[#0b2533] text-sm text-left text-[#e7edf3]">
           <thead className="bg-[#1e3a4c] text-xs uppercase text-[#ff7b1b]">
             <tr>
-              {[ 'PAR', 'SIDE', 'MODO', 'ENTRADA', 'ALVO', 'PREÇO ATUAL', 'PNL%', 'SITUAÇÃO', 'DATA', 'HORA', 'ALAV', 'EXCLUIR'].map(h => <th key={h} scope="col" className="px-4 py-3">{h}</th>)}
+              <th className="px-4 py-3">PAR</th>
+              <th className="px-4 py-3">SIDE</th>
+              <th className="px-4 py-3">MODO</th>
+              <th className="px-4 py-3">ENTRADA</th>
+              <th className="px-4 py-3">ALVO</th>
+              <th className="px-4 py-3">PREÇO ATUAL</th>
+              <th className="px-4 py-3">PNL%</th>
+              <th className="px-4 py-3">SITUAÇÃO</th>
+              <th className="px-4 py-3">DATA</th>
+              <th className="px-4 py-3">HORA</th>
+              <th className="px-4 py-3">ALAV</th>
+              <th className="px-4 py-3">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
-            {exitData.map((op) => (
-              <tr key={op.id} className="border-t border-gray-700 hover:bg-[#1e3a4c]">
-                <td className="px-4 py-2 font-medium">{op.par}</td>
-                <td className={`px-4 py-2 font-bold ${op.side === 'LONG' ? 'text-green-400' : 'text-red-400'}`}>{op.side}</td>
+            {ops.map(op => (
+              <tr
+                key={op.id}
+                className="border-t border-gray-700 hover:bg-[#1e3a4c]"
+              >
+                <td className="px-4 py-2 font-medium whitespace-nowrap">
+                  {op.par}
+                </td>
+
+                {/* SIDE colorido */}
+                <td
+                  className={`px-4 py-2 font-bold ${
+                    op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {op.side}
+                </td>
+
                 <td className="px-4 py-2">{op.modo}</td>
                 <td className="px-4 py-2">{op.entrada.toFixed(4)}</td>
                 <td className="px-4 py-2">{op.alvo.toFixed(4)}</td>
                 <td className="px-4 py-2">{op.precoAtual.toFixed(4)}</td>
-                <td className={`px-4 py-2 font-bold ${op.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{op.pnl.toFixed(2)}</td>
+
+                {/* PNL% verde se > 0, vermelho se < 0 */}
+                <td
+                  className={`px-4 py-2 font-semibold ${
+                    op.pnlPct > 0
+                      ? 'text-green-400'
+                      : op.pnlPct < 0
+                      ? 'text-red-400'
+                      : ''
+                  }`}
+                >
+                  {op.pnlPct.toFixed(2)}
+                </td>
+
                 <td className="px-4 py-2">{op.situacao}</td>
                 <td className="px-4 py-2">{op.data}</td>
                 <td className="px-4 py-2">{op.hora}</td>
                 <td className="px-4 py-2">{op.alav}</td>
                 <td className="px-4 py-2">
-                  <button onClick={() => handleRemoveOperation(op.id)} className="px-3 py-1 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700">Excluir</button>
+                  <button
+                    onClick={() => handleDelete(op.id)}
+                    className="px-3 py-1 rounded-md bg-red-500 text-white text-xs font-semibold hover:bg-red-600"
+                  >
+                    Excluir
+                  </button>
                 </td>
               </tr>
             ))}
+
+            {ops.length === 0 && (
+              <tr>
+                <td
+                  colSpan={12}
+                  className="px-4 py-4 text-center text-sm text-gray-400"
+                >
+                  Nenhuma operação cadastrada.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
