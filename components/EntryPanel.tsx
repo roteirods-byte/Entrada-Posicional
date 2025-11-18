@@ -16,14 +16,7 @@ const EntryPanel: React.FC<EntryPanelProps> = ({ coins }) => {
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [error, setError] = useState<string>('');
 
-  const fetchAndUpdatePrices = useCallback(async () => {
-    // Validação mais robusta da chave de API
-    if (!GEMINI_API_KEY || GEMINI_API_KEY.length < 10) {
-      setError('ERRO CRÍTICO: A chave da API (VITE_API_KEY) não foi configurada corretamente nas Variáveis de Ambiente do Render. Verifique se a chave foi inserida e é válida.');
-      setLoading(false);
-      return;
-    }
-    
+     
     setError('');
     console.log('Atualizando preços...');
 
