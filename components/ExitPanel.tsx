@@ -84,7 +84,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       minute: '2-digit',
     });
 
-    // Ainda não temos feed de preço: começa com preço atual = entrada
+    // Sem feed de preço por enquanto: começa com preço atual = entrada
     const precoAtual = entrada;
     const pnlPct = calcularPnl(form.side, entrada, precoAtual, alav);
 
