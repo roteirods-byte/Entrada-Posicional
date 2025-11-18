@@ -13,7 +13,7 @@ interface Operation {
   side: Side;
   modo: Mode;
   entrada: number;
-  alvo: number;        // continua existindo, só não é exibido na tabela
+  alvo: number;        // mantido só internamente
   precoAtual: number;
   pnlPct: number;
   situacao: 'ABERTA' | 'FECHADA';
@@ -29,7 +29,6 @@ interface FormState {
   side: Side;
   modo: Mode;
   entrada: string;
-  alvo: string;
   alav: string;
 }
 
@@ -42,7 +41,6 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     side: 'LONG',
     modo: 'SWING',
     entrada: '',
-    alvo: '',
     alav: '',
   });
 
@@ -79,9 +77,6 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
 
     const entrada = Number(String(form.entrada).replace(',', '.'));
-    const alvo = form.alvo
-      ? Number(String(form.alvo).replace(',', '.'))
-      : entrada;
     const alav = Number(String(form.alav).replace(',', '.'));
 
     if (!Number.isFinite(entrada) || entrada <= 0) {
@@ -101,6 +96,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     });
 
     const precoAtual = entrada;
+    const alvo = entrada; // alvo interno = entrada (sem coluna nem campo visual)
     const pnlPct = 0;
 
     const op: Operation = {
@@ -123,7 +119,6 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     setForm(prev => ({
       ...prev,
       entrada: '',
-      alvo: '',
       alav: '',
     }));
   };
@@ -143,7 +138,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         MONITORAMENTO DE SAÍDA
       </h2>
 
-      {/* BARRA DE DIGITAÇÃO DA OPERAÇÃO */}
+      {/* BARRA DE DIGITAÇÃO DA OPERAÇÃO (SEM CAMPO ALVO) */}
       <div className="bg-[#0b2533] border border-gray-700 rounded-lg p-4 mb-6">
         <div className="flex flex-wrap gap-3 items-center">
           {/* PAR */}
@@ -195,16 +190,6 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
             onChange={e => updateForm('entrada', e.target.value)}
           />
 
-          {/* ALVO (continua só na barra, não aparece na tabela) */}
-          <input
-            type="number"
-            step="0.0001"
-            className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3] w-28"
-            placeholder="Alvo"
-            value={form.alvo}
-            onChange={e => updateForm('alvo', e.target.value)}
-          />
-
           {/* ALAVANCAGEM */}
           <input
             type="number"
@@ -224,7 +209,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         </div>
       </div>
 
-      {/* TABELA DE MONITORAMENTO (SEM COLUNA ALVO) */}
+      {/* TABELA (já sem coluna ALVO) */}
       <div className="overflow-x-auto rounded-lg border border-gray-700">
         <table className="min-w-full bg-[#0b2533] text-sm text-left text-[#e7edf3]">
           <thead className="bg-[#1e3a4c] text-xs uppercase text-[#ff7b1b]">
