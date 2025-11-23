@@ -1,210 +1,207 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { EntryData } from '../types';
-import { getSwingData, getPosicionalData } from '../api/mock';
+// INÍCIO DO ARQUIVO
+import React, { useEffect, useState } from "react";
 
-interface EntryPanelProps {
-  coins: string[];
-}
+type EntradaSignal = {
+  par: string;
+  sinal: string;
+  preco: number;
+  alvo: number;
+  ganho_pct: number;
+  assert_pct: number;
+  data: string;
+  hora: string;
+};
 
-// URL do backend da automação (Python).
-// Ex.: VITE_BACKEND_URL="https://seu-backend.com"
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL as string | undefined;
+type EntradaResponse = {
+  swing: EntradaSignal[];
+  posicional: EntradaSignal[];
+};
 
-const EntryPanel: React.FC<EntryPanelProps> = ({ coins }) => {
-  const [swingData, setSwingData] = useState<EntryData[]>([]);
-  const [posicionalData, setPosicionalData] = useState<EntryData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
-  const [error, setError] = useState<string>('');
+const formatNumber = (value: number, decimals: number) =>
+  value.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 
-  // Filtra pelas moedas cadastradas no painel MOEDAS
-  const filterByCoins = useCallback(
-    (data: EntryData[]) => data.filter((d) => coins.includes(d.par)),
-    [coins]
-  );
+const EntryPanel: React.FC = () => {
+  const [swingSignals, setSwingSignals] = useState<EntradaSignal[]>([]);
+  const [posSignals, setPosSignals] = useState<EntradaSignal[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string>("--:--:--");
 
-  // Carrega dados de exemplo (mock) – usado como fallback
-  const loadFromMock = useCallback(() => {
-    const initialSwing = filterByCoins(getSwingData());
-    const initialPosicional = filterByCoins(getPosicionalData());
-    setSwingData(initialSwing);
-    setPosicionalData(initialPosicional);
-    setLastUpdated(new Date().toLocaleTimeString('pt-BR'));
-  }, [filterByCoins]);
-
-  // Busca dados no backend da automação
-  const fetchAndUpdateData = useCallback(async () => {
-    setError('');
-    setLoading(true);
-
-    // Se backend não estiver configurado, usa apenas mock
-    if (!BACKEND_URL || BACKEND_URL.length < 5) {
-      loadFromMock();
-      setError(
-        'AVISO: backend da automação (VITE_BACKEND_URL) não está configurado. Exibindo dados de exemplo.'
-      );
-      setLoading(false);
-      return;
-    }
-
+  async function fetchEntrada() {
     try {
-      const url = `${BACKEND_URL.replace(/\/$/, '')}/entrada`;
-      const res = await fetch(url);
+      setLoading(true);
+      setError(null);
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      const response = await fetch("/api/entrada", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const json = await res.json();
+      const data: EntradaResponse = await response.json();
 
-      const swing: EntryData[] = Array.isArray(json.swing) ? json.swing : [];
-      const posicional: EntryData[] = Array.isArray(json.posicional)
-        ? json.posicional
-        : [];
+      setSwingSignals(data.swing || []);
+      setPosSignals(data.posicional || []);
 
-      if (!swing.length && !posicional.length) {
-        throw new Error('Resposta da automação vazia ou em formato inesperado.');
-      }
-
-      setSwingData(filterByCoins(swing));
-      setPosicionalData(filterByCoins(posicional));
-      setLastUpdated(new Date().toLocaleTimeString('pt-BR'));
-    } catch (e) {
-      console.error('Erro ao buscar dados de entrada:', e);
-      loadFromMock();
-      let msg = 'Falha ao conectar na automação. Exibindo dados de exemplo.';
-      if (e instanceof Error) {
-        msg = `Falha ao conectar na automação: ${e.message}. Exibindo dados de exemplo.`;
-      }
-      setError(msg);
+      const now = new Date();
+      const hora = now.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      setLastUpdate(hora);
+    } catch (err) {
+      console.error("[painel entrada] Erro ao buscar /api/entrada:", err);
+      setError("Erro ao carregar dados de entrada.");
     } finally {
       setLoading(false);
     }
-  }, [filterByCoins, loadFromMock]);
+  }
 
-  // Atualiza na carga da página e a cada 10 minutos
   useEffect(() => {
-    fetchAndUpdateData();
+    // primeira carga ao abrir a página
+    fetchEntrada();
 
-    const intervalId = setInterval(fetchAndUpdateData, 10 * 60 * 1000); // 10 min
-    return () => clearInterval(intervalId);
-  }, [fetchAndUpdateData]);
+    // auto-refresh a cada 5 minutos (300.000 ms)
+    const intervalId = window.setInterval(fetchEntrada, 5 * 60 * 1000);
 
-  const renderTable = (title: string, data: EntryData[]) => (
-    <div className="w-full">
-      <h3 className="text-xl font-bold text-[#ff7b1b] mb-4 text-center">
-        {title}
-      </h3>
-      <div className="overflow-x-auto rounded-lg border border-gray-700">
-        <table className="min-w-full bg-[#0b2533] text-sm text-left text-[#e7edf3]">
-          <thead className="bg-[#1e3a4c] text-xs uppercase text-[#ff7b1b]">
-            <tr>
-              <th scope="col" className="px-4 py-3 w-[60px]">
-                PAR
-              </th>
-              <th scope="col" className="px-4 py-3 w-[120px]">
-                SINAL
-              </th>
-              <th scope="col" className="px-4 py-3 w-[100px]">
-                PREÇO
-              </th>
-              <th scope="col" className="px-4 py-3 w-[100px]">
-                ALVO
-              </th>
-              <th scope="col" className="px-4 py-3 w-[80px]">
-                GANHO%
-              </th>
-              <th scope="col" className="px-4 py-3 w-[80px]">
-                ASSERT%
-              </th>
-              <th scope="col" className="px-4 py-3 w-[100px]">
-                DATA
-              </th>
-              <th scope="col" className="px-4 py-3 w-[96px]">
-                HORA
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((entry, index) => (
-              <tr
-                key={index}
-                className="border-t border-gray-700 hover:bg-[#1e3a4c]"
-              >
-                <td className="px-4 py-2 font-medium whitespace-nowrap">
-                  {entry.par}
-                </td>
-                <td
-                  className={`px-4 py-2 font-bold ${
-                    entry.sinal === 'LONG'
-                      ? 'text-green-400'
-                      : entry.sinal === 'SHORT'
-                      ? 'text-red-400'
-                      : 'text-gray-400'
-                  }`}
-                >
-                  {entry.sinal}
-                </td>
-                <td className="px-4 py-2 font-semibold text-yellow-300">
-                  {entry.preco.toFixed(4)}
-                </td>
-                <td className="px-4 py-2">{entry.alvo.toFixed(4)}</td>
-                <td
-                  className={`px-4 py-2 ${
-                    entry.ganho > 0 ? 'text-green-400' : 'text-white'
-                  }`}
-                >
-                  {entry.ganho.toFixed(2)}
-                </td>
-                <td className="px-4 py-2">
-                  {entry.assert_pct.toFixed(2)}
-                </td>
-                <td className="px-4 py-2">{entry.data}</td>
-                <td className="px-4 py-2">{entry.hora}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+    // limpa o timer se o componente for desmontado
+    return () => window.clearInterval(intervalId);
+  }, []);
 
-  if (loading && swingData.length === 0 && posicionalData.length === 0) {
+  const renderRow = (s: EntradaSignal, idx: number) => {
+    const isLong = s.sinal === "LONG";
+    const sinalColor =
+      s.sinal === "LONG"
+        ? "text-green-400"
+        : s.sinal === "SHORT"
+        ? "text-red-400"
+        : "text-white";
+
     return (
-      <div className="text-center text-lg text-gray-300">
-        Carregando dados de entrada...
-      </div>
+      <tr key={`${s.par}-${idx}`} className="text-sm text-white">
+        <td className="px-3 py-1">{s.par}</td>
+        <td className={`px-3 py-1 font-semibold ${sinalColor}`}>{s.sinal}</td>
+        <td className="px-3 py-1">
+          {formatNumber(s.preco ?? 0, 3)}
+        </td>
+        <td className="px-3 py-1">
+          {formatNumber(s.alvo ?? 0, 3)}
+        </td>
+        <td className={`px-3 py-1 ${isLong ? "text-green-400" : "text-red-400"}`}>
+          {formatNumber(s.ganho_pct ?? 0, 2)}%
+        </td>
+        <td className="px-3 py-1">
+          {formatNumber(s.assert_pct ?? 0, 2)}%
+        </td>
+        <td className="px-3 py-1">{s.data}</td>
+        <td className="px-3 py-1">{s.hora}</td>
+      </tr>
     );
-  }
-
-  if (error && swingData.length === 0 && posicionalData.length === 0) {
-    return (
-      <p className="text-center text-red-400 bg-red-900 bg-opacity-30 p-3 rounded-md mb-4">
-        {error}
-      </p>
-    );
-  }
+  };
 
   return (
-    <div className="w-full">
+    <div className="p-6 text-white">
+      <h2 className="text-xl font-bold mb-2">PAINEL ENTRADA</h2>
+
+      <p className="text-sm mb-4">
+        Dados atualizados às:{" "}
+        <span className="font-mono">{lastUpdate}</span>
+      </p>
+
       {error && (
-        <p className="text-center text-yellow-300 bg-yellow-900 bg-opacity-20 p-3 rounded-md mb-4 text-sm">
+        <div className="mb-4 text-sm text-red-400">
           {error}
-        </p>
+        </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        {renderTable('ENTRADA 4H - SWING', swingData)}
-        {renderTable('ENTRADA 1H - POSICIONAL', posicionalData)}
+      {loading && (
+        <div className="mb-4 text-sm text-gray-300">
+          Atualizando dados...
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ENTRADA 4H – SWING */}
+        <div className="bg-[#04162a] rounded-xl border border-[#1f3b5c] overflow-hidden">
+          <div className="px-4 py-2 border-b border-[#1f3b5c]">
+            <span className="text-sm font-semibold text-orange-300">
+              ENTRADA 4H – SWING
+            </span>
+          </div>
+          <table className="w-full text-left">
+            <thead className="bg-[#06213c] text-xs text-orange-300">
+              <tr>
+                <th className="px-3 py-2">PAR</th>
+                <th className="px-3 py-2">SINAL</th>
+                <th className="px-3 py-2">PREÇO</th>
+                <th className="px-3 py-2">ALVO</th>
+                <th className="px-3 py-2">GANHO %</th>
+                <th className="px-3 py-2">ASSERT %</th>
+                <th className="px-3 py-2">DATA</th>
+                <th className="px-3 py-2">HORA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {swingSignals.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-3 py-3 text-center text-sm text-gray-400"
+                  >
+                    Nenhum sinal disponível.
+                  </td>
+                </tr>
+              ) : (
+                swingSignals.map(renderRow)
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ENTRADA 1D – POSICIONAL */}
+        <div className="bg-[#04162a] rounded-xl border border-[#1f3b5c] overflow-hidden">
+          <div className="px-4 py-2 border-b border-[#1f3b5c]">
+            <span className="text-sm font-semibold text-orange-300">
+              ENTRADA 1D – POSICIONAL
+            </span>
+          </div>
+          <table className="w-full text-left">
+            <thead className="bg-[#06213c] text-xs text-orange-300">
+              <tr>
+                <th className="px-3 py-2">PAR</th>
+                <th className="px-3 py-2">SINAL</th>
+                <th className="px-3 py-2">PREÇO</th>
+                <th className="px-3 py-2">ALVO</th>
+                <th className="px-3 py-2">GANHO %</th>
+                <th className="px-3 py-2">ASSERT %</th>
+                <th className="px-3 py-2">DATA</th>
+                <th className="px-3 py-2">HORA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {posSignals.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-3 py-3 text-center text-sm text-gray-400"
+                  >
+                    Nenhum sinal disponível.
+                  </td>
+                </tr>
+              ) : (
+                posSignals.map(renderRow)
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-
-      {lastUpdated && (
-        <p className="text-center text-sm text-gray-400 mt-4">
-          Dados atualizados às: {lastUpdated}
-        </p>
-      )}
     </div>
   );
 };
 
 export default EntryPanel;
+// FIM DO ARQUIVO

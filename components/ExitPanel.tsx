@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface ExitPanelProps {
   coins: string[];
@@ -13,7 +13,7 @@ interface Operation {
   side: Side;
   modo: Mode;
   entrada: number;
-  alvo: number;        // mantido só internamente
+  alvo: number; // usado só internamente
   precoAtual: number;
   pnlPct: number;
   situacao: 'ABERTA' | 'FECHADA';
@@ -44,7 +44,10 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     alav: '',
   });
 
-  // Carrega operações salvas
+  // controla se já carregou do storage
+  const loadedRef = useRef(false);
+
+  // Carrega operações salvas (uma vez)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -54,11 +57,14 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       }
     } catch (e) {
       console.error('Erro ao carregar operações salvas', e);
+    } finally {
+      loadedRef.current = true;
     }
   }, []);
 
-  // Salva operações sempre que mudar
+  // Salva operações somente depois de ter carregado
   useEffect(() => {
+    if (!loadedRef.current) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
     } catch (e) {
@@ -67,11 +73,11 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
   }, [ops]);
 
   const updateForm = (field: keyof FormState, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleAdd = () => {
-    if (!form.par || !form.entrada || !form.alav) {
+    if (!form.par || !form.entrada.trim() || !form.alav.trim()) {
       alert('Preencha pelo menos PAR, ENTRADA e ALAV.');
       return;
     }
@@ -96,7 +102,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     });
 
     const precoAtual = entrada;
-    const alvo = entrada; // alvo interno = entrada (sem coluna nem campo visual)
+    const alvo = entrada;
     const pnlPct = 0;
 
     const op: Operation = {
@@ -114,9 +120,9 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       alav,
     };
 
-    setOps(prev => [...prev, op]);
+    setOps((prev) => [...prev, op]);
 
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
       entrada: '',
       alav: '',
@@ -124,7 +130,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
   };
 
   const handleDelete = (id: number) => {
-    setOps(prev => prev.filter(op => op.id !== id));
+    setOps((prev) => prev.filter((op) => op.id !== id));
   };
 
   const formatNumber = (value: number, decimals = 4) =>
@@ -138,31 +144,29 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         MONITORAMENTO DE SAÍDA
       </h2>
 
-      {/* BARRA DE DIGITAÇÃO DA OPERAÇÃO (SEM CAMPO ALVO) */}
-      <div className="bg-[#0b2533] border border-gray-700 rounded-lg p-4 mb-6">
-        <div className="flex flex-wrap gap-3 items-center">
+      {/* BARRA DE DIGITAÇÃO DA OPERAÇÃO */}
+      <div className="bg-[#0b2533] border border-gray-700 rounded-lg p-3 mb-5">
+        <div className="flex flex-wrap gap-2 items-center">
           {/* PAR */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3] min-w-[90px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[80px]"
             value={form.par}
-            onChange={e => updateForm('par', e.target.value)}
+            onChange={(e) => updateForm('par', e.target.value)}
           >
-            {sortedCoins.map(coin => (
+            {sortedCoins.map((coin) => (
               <option key={coin} value={coin}>
                 {coin}
               </option>
             ))}
           </select>
 
-          {/* SIDE - LONG verde, SHORT vermelho */}
+          {/* SIDE */}
           <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm min-w-[90px] ${
+            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] ${
               form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
             }`}
             value={form.side}
-            onChange={e =>
-              updateForm('side', e.target.value as Side)
-            }
+            onChange={(e) => updateForm('side', e.target.value as Side)}
           >
             <option value="LONG">LONG</option>
             <option value="SHORT">SHORT</option>
@@ -170,92 +174,84 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* MODO */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3] min-w-[110px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[90px]"
             value={form.modo}
-            onChange={e =>
-              updateForm('modo', e.target.value as Mode)
-            }
+            onChange={(e) => updateForm('modo', e.target.value as Mode)}
           >
             <option value="SWING">SWING</option>
             <option value="POSICIONAL">POSICIONAL</option>
           </select>
 
-          {/* ENTRADA */}
+          {/* ENTRADA (sem setas, texto) */}
           <input
-            type="number"
-            step="0.0001"
-            className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3] w-28"
+            type="text"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-24"
             placeholder="Entrada"
             value={form.entrada}
-            onChange={e => updateForm('entrada', e.target.value)}
+            onChange={(e) => updateForm('entrada', e.target.value)}
           />
 
-          {/* ALAVANCAGEM */}
+          {/* ALAVANCAGEM (sem setas, texto) */}
           <input
-            type="number"
-            step="1"
-            className="bg-[#061723] border border-gray-600 rounded-md px-3 py-2 text-sm text-[#e7edf3] w-20"
+            type="text"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-16"
             placeholder="Alav"
             value={form.alav}
-            onChange={e => updateForm('alav', e.target.value)}
+            onChange={(e) => updateForm('alav', e.target.value)}
           />
 
           <button
             onClick={handleAdd}
-            className="ml-auto bg-[#ff7b1b] hover:bg-[#ff9b46] text-sm font-semibold text-[#041019] px-4 py-2 rounded-md"
+            className="ml-auto bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
           >
             Adicionar Operação
           </button>
         </div>
       </div>
 
-      {/* TABELA (já sem coluna ALVO) */}
+      {/* TABELA (colunas mais estreitas) */}
       <div className="overflow-x-auto rounded-lg border border-gray-700">
-        <table className="min-w-full bg-[#0b2533] text-sm text-left text-[#e7edf3]">
-          <thead className="bg-[#1e3a4c] text-xs uppercase text-[#ff7b1b]">
+        <table className="min-w-full bg-[#0b2533] text-xs text-left text-[#e7edf3]">
+          <thead className="bg-[#1e3a4c] text-[11px] uppercase text-[#ff7b1b]">
             <tr>
-              <th className="px-4 py-3">PAR</th>
-              <th className="px-4 py-3">SIDE</th>
-              <th className="px-4 py-3">MODO</th>
-              <th className="px-4 py-3">ENTRADA</th>
-              <th className="px-4 py-3">PREÇO ATUAL</th>
-              <th className="px-4 py-3">PNL%</th>
-              <th className="px-4 py-3">SITUAÇÃO</th>
-              <th className="px-4 py-3">DATA</th>
-              <th className="px-4 py-3">HORA</th>
-              <th className="px-4 py-3">ALAV</th>
-              <th className="px-4 py-3 text-center">EXCLUIR</th>
+              <th className="px-2 py-2 w-20">PAR</th>
+              <th className="px-2 py-2 w-16">SIDE</th>
+              <th className="px-2 py-2 w-24">MODO</th>
+              <th className="px-2 py-2 w-24 text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-28 text-right">PREÇO ATUAL</th>
+              <th className="px-2 py-2 w-20 text-right">PNL%</th>
+              <th className="px-2 py-2 w-24">SITUAÇÃO</th>
+              <th className="px-2 py-2 w-24">DATA</th>
+              <th className="px-2 py-2 w-20">HORA</th>
+              <th className="px-2 py-2 w-16 text-right">ALAV</th>
+              <th className="px-2 py-2 w-20 text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
-            {ops.map(op => (
+            {ops.map((op) => (
               <tr
                 key={op.id}
                 className="border-t border-gray-700 hover:bg-[#1e3a4c]"
               >
-                <td className="px-4 py-2 font-medium whitespace-nowrap">
+                <td className="px-2 py-1 font-medium whitespace-nowrap">
                   {op.par}
                 </td>
                 <td
-                  className={`px-4 py-2 font-bold whitespace-nowrap ${
-                    op.side === 'LONG'
-                      ? 'text-green-400'
-                      : 'text-red-400'
+                  className={`px-2 py-1 font-bold whitespace-nowrap ${
+                    op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
                   }`}
                 >
                   {op.side}
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap">
-                  {op.modo}
-                </td>
-                <td className="px-4 py-2">
+                <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
+                <td className="px-2 py-1 text-right">
                   {formatNumber(op.entrada)}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-2 py-1 text-right">
                   {formatNumber(op.precoAtual)}
                 </td>
                 <td
-                  className={`px-4 py-2 font-semibold ${
+                  className={`px-2 py-1 text-right font-semibold ${
                     op.pnlPct > 0
                       ? 'text-green-400'
                       : op.pnlPct < 0
@@ -265,20 +261,16 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                 >
                   {formatPnL(op.pnlPct)}
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap">
+                <td className="px-2 py-1 whitespace-nowrap">
                   {op.situacao}
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap">
-                  {op.data}
-                </td>
-                <td className="px-4 py-2 whitespace-nowrap">
-                  {op.hora}
-                </td>
-                <td className="px-4 py-2">{op.alav}</td>
-                <td className="px-4 py-2 text-center">
+                <td className="px-2 py-1 whitespace-nowrap">{op.data}</td>
+                <td className="px-2 py-1 whitespace-nowrap">{op.hora}</td>
+                <td className="px-2 py-1 text-right">{op.alav}</td>
+                <td className="px-2 py-1 text-center">
                   <button
                     onClick={() => handleDelete(op.id)}
-                    className="bg-red-600 hover:bg-red-700 text-xs font-semibold text-white px-3 py-1 rounded-md"
+                    className="bg-red-600 hover:bg-red-700 text-[11px] font-semibold text-white px-3 py-1 rounded-md"
                   >
                     Excluir
                   </button>
