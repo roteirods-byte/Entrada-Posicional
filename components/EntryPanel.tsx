@@ -71,12 +71,11 @@ const EntryPanel: React.FC = () => {
     // limpa o timer se o componente for desmontado
     return () => window.clearInterval(intervalId);
   }, []);
-  
+    
   const renderRow = (s: EntradaSignal, idx: number) => {
   const ganho = Number(s.ganho_pct ?? 0);
   const assertVal = Number(s.assert_pct ?? 0);
 
-  // COR DO TEXTO DO SINAL (LONG/SHORT/NAO ENTRAR)
   const sinalColor =
     s.sinal === "LONG"
       ? "text-green-400"
@@ -84,10 +83,7 @@ const EntryPanel: React.FC = () => {
       ? "text-red-400"
       : "text-white";
 
-  // REGRA 1: GANHO% >= 3 => VERDE, ABAIXO DE 3 => VERMELHO
   const ganhoColor = ganho >= 3 ? "text-green-400" : "text-red-400";
-
-  // REGRA 2: ASSERT% >= 65 => VERDE, ABAIXO DE 65 => VERMELHO
   const assertColor = assertVal >= 65 ? "text-green-400" : "text-red-400";
 
   return (
@@ -111,7 +107,7 @@ const EntryPanel: React.FC = () => {
     </tr>
   );
 };
-  
+    
   return (
     <div className="p-6 text-white">
       <h2 className="text-xl font-bold mb-2">PAINEL ENTRADA</h2>
