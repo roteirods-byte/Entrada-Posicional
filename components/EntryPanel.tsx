@@ -71,9 +71,10 @@ const EntryPanel: React.FC = () => {
     // limpa o timer se o componente for desmontado
     return () => window.clearInterval(intervalId);
   }, []);
-
+  
   const renderRow = (s: EntradaSignal, idx: number) => {
-  const isLong = s.sinal === "LONG";
+  const ganho = Number(s.ganho_pct ?? 0);
+  const assertVal = Number(s.assert_pct ?? 0);
 
   // COR DO TEXTO DO SINAL (LONG/SHORT/NAO ENTRAR)
   const sinalColor =
@@ -83,15 +84,11 @@ const EntryPanel: React.FC = () => {
       ? "text-red-400"
       : "text-white";
 
-  // COR DO GANHO%
-  // GANHO% >= 3 => VERDE, ABAIXO DE 3 => VERMELHO
-  const ganhoColor =
-    (s.ganho_pct ?? 0) >= 3 ? "text-green-400" : "text-red-400";
+  // REGRA 1: GANHO% >= 3 => VERDE, ABAIXO DE 3 => VERMELHO
+  const ganhoColor = ganho >= 3 ? "text-green-400" : "text-red-400";
 
-  // COR DA ASSERTIVIDADE%
-  // ASSERT% >= 65 => VERDE, ABAIXO DE 65 => VERMELHO
-  const assertColor =
-    (s.assert_pct ?? 0) >= 65 ? "text-green-400" : "text-red-400";
+  // REGRA 2: ASSERT% >= 65 => VERDE, ABAIXO DE 65 => VERMELHO
+  const assertColor = assertVal >= 65 ? "text-green-400" : "text-red-400";
 
   return (
     <tr key={`${s.par}-${idx}`} className="text-sm text-white">
@@ -104,17 +101,17 @@ const EntryPanel: React.FC = () => {
         {formatNumber(s.alvo ?? 0, 3)}
       </td>
       <td className={`px-3 py-1 ${ganhoColor}`}>
-        {formatNumber(s.ganho_pct ?? 0, 2)}%
+        {formatNumber(ganho, 2)}%
       </td>
       <td className={`px-3 py-1 ${assertColor}`}>
-        {formatNumber(s.assert_pct ?? 0, 2)}%
+        {formatNumber(assertVal, 2)}%
       </td>
       <td className="px-3 py-1">{s.data}</td>
       <td className="px-3 py-1">{s.hora}</td>
     </tr>
   );
 };
-
+  
   return (
     <div className="p-6 text-white">
       <h2 className="text-xl font-bold mb-2">PAINEL ENTRADA</h2>
