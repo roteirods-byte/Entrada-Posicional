@@ -73,35 +73,47 @@ const EntryPanel: React.FC = () => {
   }, []);
 
   const renderRow = (s: EntradaSignal, idx: number) => {
-    const isLong = s.sinal === "LONG";
-    const sinalColor =
-      s.sinal === "LONG"
-        ? "text-green-400"
-        : s.sinal === "SHORT"
-        ? "text-red-400"
-        : "text-white";
+  const isLong = s.sinal === "LONG";
 
-    return (
-      <tr key={`${s.par}-${idx}`} className="text-sm text-white">
-        <td className="px-3 py-1">{s.par}</td>
-        <td className={`px-3 py-1 font-semibold ${sinalColor}`}>{s.sinal}</td>
-        <td className="px-3 py-1">
-          {formatNumber(s.preco ?? 0, 3)}
-        </td>
-        <td className="px-3 py-1">
-          {formatNumber(s.alvo ?? 0, 3)}
-        </td>
-        <td className={`px-3 py-1 ${isLong ? "text-green-400" : "text-red-400"}`}>
-          {formatNumber(s.ganho_pct ?? 0, 2)}%
-        </td>
-        <td className="px-3 py-1">
-          {formatNumber(s.assert_pct ?? 0, 2)}%
-        </td>
-        <td className="px-3 py-1">{s.data}</td>
-        <td className="px-3 py-1">{s.hora}</td>
-      </tr>
-    );
-  };
+  // COR DO TEXTO DO SINAL (LONG/SHORT/NAO ENTRAR)
+  const sinalColor =
+    s.sinal === "LONG"
+      ? "text-green-400"
+      : s.sinal === "SHORT"
+      ? "text-red-400"
+      : "text-white";
+
+  // COR DO GANHO%
+  // GANHO% >= 3 => VERDE, ABAIXO DE 3 => VERMELHO
+  const ganhoColor =
+    (s.ganho_pct ?? 0) >= 3 ? "text-green-400" : "text-red-400";
+
+  // COR DA ASSERTIVIDADE%
+  // ASSERT% >= 65 => VERDE, ABAIXO DE 65 => VERMELHO
+  const assertColor =
+    (s.assert_pct ?? 0) >= 65 ? "text-green-400" : "text-red-400";
+
+  return (
+    <tr key={`${s.par}-${idx}`} className="text-sm text-white">
+      <td className="px-3 py-1">{s.par}</td>
+      <td className={`px-3 py-1 font-semibold ${sinalColor}`}>{s.sinal}</td>
+      <td className="px-3 py-1">
+        {formatNumber(s.preco ?? 0, 3)}
+      </td>
+      <td className="px-3 py-1">
+        {formatNumber(s.alvo ?? 0, 3)}
+      </td>
+      <td className={`px-3 py-1 ${ganhoColor}`}>
+        {formatNumber(s.ganho_pct ?? 0, 2)}%
+      </td>
+      <td className={`px-3 py-1 ${assertColor}`}>
+        {formatNumber(s.assert_pct ?? 0, 2)}%
+      </td>
+      <td className="px-3 py-1">{s.data}</td>
+      <td className="px-3 py-1">{s.hora}</td>
+    </tr>
+  );
+};
 
   return (
     <div className="p-6 text-white">
