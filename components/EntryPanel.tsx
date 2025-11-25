@@ -61,18 +61,18 @@ const EntryPanel: React.FC = () => {
     }
   }
 
-  useEffect(() => {
-    // primeira carga ao abrir a página
-    fetchEntrada();
+ useEffect(() => {
+  // primeira carga ao abrir a página
+  fetchEntrada();
 
-    // auto-refresh a cada 5 minutos (300.000 ms)
-    const intervalId = window.setInterval(fetchEntrada, 5 * 60 * 1000);
+  // auto-refresh a cada 20 segundos (20.000 ms)
+  const intervalId = window.setInterval(fetchEntrada, 20_000);
 
-    // limpa o timer se o componente for desmontado
-    return () => window.clearInterval(intervalId);
-  }, []);
-    
-  const renderRow = (s: EntradaSignal, idx: number) => {
+  // limpa o timer se o componente for desmontado
+  return () => window.clearInterval(intervalId);
+}, []);
+
+    const renderRow = (s: EntradaSignal, idx: number) => {
   const ganho = Number(s.ganho_pct ?? 0);
   const assertVal = Number(s.assert_pct ?? 0);
 
