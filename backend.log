@@ -1,8 +1,0 @@
-nohup: ignoring input
-npm ERR! Missing script: "backend"
-npm ERR! 
-npm ERR! To see a list of scripts, run:
-npm ERR!   npm run
-
-npm ERR! A complete log of this run can be found in:
-npm ERR!     /home/roteiro_ds/.npm/_logs/2025-11-19T12_31_29_262Z-debug-0.log
