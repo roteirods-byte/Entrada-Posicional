@@ -104,7 +104,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     const hora = agora.toTimeString().slice(0, 5); // HH:MM
 
     // Por enquanto, ALVO 1/2/3 = ENTRADA e GANHOS = 0.
-    // Quando integrar com worker_saida, esses campos virão do JSON.
+    // Quando integrar com worker_saida, esses campos virão do JSON com preço real.
     const novaOp: Operation = {
       id: Date.now(),
       par: form.par,
@@ -156,7 +156,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <div className="flex flex-wrap items-center gap-3 text-xs text-[#e7edf3]">
           {/* PAR */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[80px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#ff7b1b] min-w-[70px]"
             value={form.par}
             onChange={(e) => updateForm('par', e.target.value)}
           >
@@ -169,7 +169,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* SIDE */}
           <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] ${
+            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] ${
               form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
             }`}
             value={form.side}
@@ -207,9 +207,10 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
             onChange={(e) => updateForm('alav', e.target.value)}
           />
 
+          {/* Botão logo depois do campo Alav */}
           <button
             onClick={handleAdd}
-            className="ml-auto bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
+            className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
           >
             Adicionar Operação
           </button>
@@ -221,22 +222,22 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <table className="min-w-full bg-[#0b2533] text-xs text-left text-[#e7edf3]">
           <thead className="bg-[#1e3a4c] text-[11px] uppercase text-[#ff7b1b]">
             <tr>
-              <th className="px-2 py-2 w-16">PAR</th>
-              <th className="px-2 py-2 w-16">SIDE</th>
-              <th className="px-2 py-2 w-20">MODO</th>
-              <th className="px-2 py-2 w-24 text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-24 text-right">PREÇO</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 3%</th>
-              <th className="px-2 py-2 w-24">SITUAÇÃO</th>
-              <th className="px-2 py-2 w-16 text-right">ALAV</th>
-              <th className="px-2 py-2 w-20">DATA</th>
-              <th className="px-2 py-2 w-16">HORA</th>
-              <th className="px-2 py-2 w-20 text-center">EXCLUIR</th>
+              <th className="px-2 py-2 w-[50px]">PAR</th>
+              <th className="px-2 py-2 w-[60px]">SIDE</th>
+              <th className="px-2 py-2 w-[80px]">MODO</th>
+              <th className="px-2 py-2 w-[80px] text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-[80px] text-right">PREÇO</th>
+              <th className="px-2 py-2 w-[80px] text-right">ALVO 1 US</th>
+              <th className="px-2 py-2 w-[80px] text-right">GANHO 1%</th>
+              <th className="px-2 py-2 w-[80px] text-right">ALVO 2 US</th>
+              <th className="px-2 py-2 w-[80px] text-right">GANHO 2%</th>
+              <th className="px-2 py-2 w-[80px] text-right">ALVO 3 US</th>
+              <th className="px-2 py-2 w-[80px] text-right">GANHO 3%</th>
+              <th className="px-2 py-2 w-[80px]">SITUAÇÃO</th>
+              <th className="px-2 py-2 w-[60px] text-right">ALAV</th>
+              <th className="px-2 py-2 w-[80px]">DATA</th>
+              <th className="px-2 py-2 w-[60px]">HORA</th>
+              <th className="px-2 py-2 w-[70px] text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
