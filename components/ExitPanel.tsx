@@ -13,7 +13,6 @@ interface Operation {
   side: Side;
   modo: Mode;
   entrada: number;
-  // preço “base” salvo junto com a operação (usado como reserva)
   preco: number;
   alvo_1: number;
   ganho_1_pct: number;
@@ -35,9 +34,10 @@ interface FormState {
   alav: string;
 }
 
-// estrutura esperada do /api/entrada (mesma do painel ENTRADA)
+// Resposta do /api/entrada (simplificada)
 interface EntradaItem {
   par: string;
+  modo: Mode;
   preco: number;
 }
 
@@ -46,30 +46,53 @@ interface EntradaResponse {
   posicional?: EntradaItem[];
 }
 
+type PriceMap = Record<string, number>;
+
 const STORAGE_KEY = 'autotrader_exit_ops_v2';
+const ENTRADA_API_URL = '/api/entrada';
 
 const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
   const [ops, setOps] = useState<Operation[]>([]);
   const [form, setForm] = useState<FormState>({
-    par: coins[0]?.toUpperCase() ?? 'AAVE',
+    par: coins[0] ?? 'AAVE',
     side: 'LONG',
     modo: 'SWING',
     entrada: '',
     alav: '',
   });
 
-  // mapa: "SWING-AAVE" -> preço atual
-  const [priceMap, setPriceMap] = useState<Record<string, number>>({});
+  // mapa com o preço atual por (modo + par), vindo do painel ENTRADA
+  const [priceMap, setPriceMap] = useState<PriceMap>({});
   const loadedRef = useRef(false);
 
-  // 1) Carregar operações do localStorage
+  // -----------------------------
+  // 1) Carregar / salvar operações no localStorage
+  // -----------------------------
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as Operation[];
+        const parsed = JSON.parse(raw) as any[];
         if (Array.isArray(parsed)) {
-          setOps(parsed);
+          const normalizado: Operation[] = parsed.map((op, idx) => ({
+            id: typeof op.id === 'number' ? op.id : Date.now() + idx,
+            par: String(op.par ?? 'AAVE').toUpperCase(),
+            side: op.side === 'SHORT' ? 'SHORT' : 'LONG',
+            modo: op.modo === 'POSICIONAL' ? 'POSICIONAL' : 'SWING',
+            entrada: Number(op.entrada ?? 0),
+            preco: Number(op.preco ?? op.entrada ?? 0),
+            alvo_1: Number(op.alvo_1 ?? op.entrada ?? 0),
+            ganho_1_pct: Number(op.ganho_1_pct ?? 0),
+            alvo_2: Number(op.alvo_2 ?? op.entrada ?? 0),
+            ganho_2_pct: Number(op.ganho_2_pct ?? 0),
+            alvo_3: Number(op.alvo_3 ?? op.entrada ?? 0),
+            ganho_3_pct: Number(op.ganho_3_pct ?? 0),
+            situacao: String(op.situacao ?? 'ABERTA'),
+            data: String(op.data ?? ''),
+            hora: String(op.hora ?? ''),
+            alav: Number(op.alav ?? 1),
+          }));
+          setOps(normalizado);
         }
       }
     } catch (e) {
@@ -79,7 +102,6 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, []);
 
-  // 2) Salvar operações sempre que mudar (garantir persistência)
   useEffect(() => {
     if (!loadedRef.current) return;
     try {
@@ -89,42 +111,41 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, [ops]);
 
-  // 3) Ler preços do /api/entrada periodicamente (mesmo do painel ENTRADA)
+  // -----------------------------
+  // 2) Buscar PREÇO real do painel ENTRADA (/api/entrada)
+  // -----------------------------
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const res = await fetch('/api/entrada');
+        const res = await fetch(ENTRADA_API_URL);
         if (!res.ok) return;
 
-        const data = (await res.json()) as EntradaResponse;
-        const map: Record<string, number> = {};
+        const data: EntradaResponse = await res.json();
+        const map: PriceMap = {};
 
-        const fillFromArray = (arr: EntradaItem[] | undefined, modo: Mode) => {
-          if (!arr) return;
+        const addArray = (arr?: EntradaItem[]) => {
+          if (!Array.isArray(arr)) return;
           arr.forEach((item) => {
-            if (!item?.par || typeof item.preco !== 'number') return;
-            const key = `${modo}-${String(item.par).toUpperCase()}`;
-            map[key] = item.preco;
+            const key = `${item.modo}-${item.par}`.toUpperCase();
+            map[key] = Number(item.preco ?? 0);
           });
         };
 
-        fillFromArray(data.swing, 'SWING');
-        fillFromArray(data.posicional, 'POSICIONAL');
+        addArray(data.swing);
+        addArray(data.posicional);
 
         setPriceMap(map);
       } catch (e) {
-        console.error('Erro ao buscar preços para painel de saída', e);
+        console.error('Erro ao buscar preços atuais de entrada', e);
       }
     };
 
-    // chama na entrada
     fetchPrices();
-    // atualiza a cada 10 segundos
-    const id = setInterval(fetchPrices, 10_000);
+    const id = setInterval(fetchPrices, 60_000); // atualiza a cada 60s
     return () => clearInterval(id);
   }, []);
 
-  const sortedCoins = [...coins].map((c) => c.toUpperCase()).sort();
+  const sortedCoins = [...coins].sort();
 
   const updateForm = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -152,19 +173,18 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     const data = agora.toISOString().slice(0, 10); // AAAA-MM-DD
     const hora = agora.toTimeString().slice(0, 5); // HH:MM
 
-    const parUpper = form.par.toUpperCase();
-    const key = `${form.modo}-${parUpper}`;
+    const key = `${form.modo}-${form.par}`.toUpperCase();
     const precoAtual = priceMap[key] ?? entrada;
 
     const novaOp: Operation = {
       id: Date.now(),
-      par: parUpper,
+      par: form.par,
       side: form.side,
       modo: form.modo,
       entrada,
-      // salva um preço base; na tela será substituído pelo preço vivo
       preco: precoAtual,
-      // por enquanto alvos iguais à entrada (serão sobrescritos pelo worker de saída)
+      // por enquanto os alvos são iguais à entrada;
+      // ganhos ficam 0 até integrar com worker_saida.
       alvo_1: entrada,
       ganho_1_pct: 0,
       alvo_2: entrada,
@@ -191,7 +211,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
   };
 
   const formatNumber = (value: number, decimals = 3) =>
-    Number.isFinite(value) ? value.toFixed(decimals) : '-';
+    Number.isFinite(value) ? value.toFixed(decimals) : '0.000';
 
   const formatPercent = (value: number) =>
     Number.isFinite(value) ? value.toFixed(2) : '0.00';
@@ -210,9 +230,9 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <div className="flex flex-wrap items-center gap-3 text-xs text-[#e7edf3]">
           {/* PAR */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] text-[#ff7b1b]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] text-[#ff7b1b]"
             value={form.par}
-            onChange={(e) => updateForm('par', e.target.value.toUpperCase())}
+            onChange={(e) => updateForm('par', e.target.value)}
           >
             {sortedCoins.map((coin) => (
               <option key={coin} value={coin}>
@@ -235,7 +255,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* MODO */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[90px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[95px]"
             value={form.modo}
             onChange={(e) => updateForm('modo', e.target.value as Mode)}
           >
@@ -246,7 +266,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* ENTRADA */}
           <input
             type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-24"
             placeholder="Entrada"
             value={form.entrada}
             onChange={(e) => updateForm('entrada', e.target.value)}
@@ -261,7 +281,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
             onChange={(e) => updateForm('alav', e.target.value)}
           />
 
-          {/* Botão Adicionar (já perto dos campos) */}
+          {/* Botão adicionar grudado na barra */}
           <button
             onClick={handleAdd}
             className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
@@ -276,28 +296,28 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <table className="min-w-full bg-[#0b2533] text-xs text-left text-[#e7edf3]">
           <thead className="bg-[#1e3a4c] text-[11px] uppercase text-[#ff7b1b]">
             <tr>
-              <th className="px-2 py-2 w-12">PAR</th>
-              <th className="px-2 py-2 w-12">SIDE</th>
-              <th className="px-2 py-2 w-16">MODO</th>
-              <th className="px-2 py-2 w-20 text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-20 text-right">PREÇO</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-16 text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-16 text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-16 text-right">GANHO 3%</th>
-              <th className="px-2 py-2 w-20">SITUAÇÃO</th>
+              <th className="px-2 py-2 w-14">PAR</th>
+              <th className="px-2 py-2 w-14">SIDE</th>
+              <th className="px-2 py-2 w-20">MODO</th>
+              <th className="px-2 py-2 w-24 text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-24 text-right">PREÇO</th>
+              <th className="px-2 py-2 w-24 text-right">ALVO 1 US</th>
+              <th className="px-2 py-2 w-20 text-right">GANHO 1%</th>
+              <th className="px-2 py-2 w-24 text-right">ALVO 2 US</th>
+              <th className="px-2 py-2 w-20 text-right">GANHO 2%</th>
+              <th className="px-2 py-2 w-24 text-right">ALVO 3 US</th>
+              <th className="px-2 py-2 w-20 text-right">GANHO 3%</th>
+              <th className="px-2 py-2 w-24">SITUAÇÃO</th>
               <th className="px-2 py-2 w-14 text-right">ALAV</th>
               <th className="px-2 py-2 w-20">DATA</th>
-              <th className="px-2 py-2 w-14">HORA</th>
-              <th className="px-2 py-2 w-18 text-center">EXCLUIR</th>
+              <th className="px-2 py-2 w-16">HORA</th>
+              <th className="px-2 py-2 w-20 text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
             {ops.length > 0 ? (
               ops.map((op) => {
-                const key = `${op.modo}-${op.par}`;
+                const key = `${op.modo}-${op.par}`.toUpperCase();
                 const precoAtual = priceMap[key] ?? op.preco;
 
                 return (
@@ -306,7 +326,6 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                     className="border-t border-[#173446] hover:bg-[#102b3a]"
                   >
                     <td className="px-2 py-1 whitespace-nowrap">{op.par}</td>
-
                     <td
                       className={`px-2 py-1 whitespace-nowrap font-semibold ${
                         op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
@@ -314,14 +333,11 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                     >
                       {op.side}
                     </td>
-
                     <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
 
                     <td className="px-2 py-1 text-right">
                       {formatNumber(op.entrada)}
                     </td>
-
-                    {/* PREÇO ATUAL (do JSON de entrada) */}
                     <td className="px-2 py-1 text-right">
                       {formatNumber(precoAtual)}
                     </td>
