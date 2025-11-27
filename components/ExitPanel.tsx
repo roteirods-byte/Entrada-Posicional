@@ -1,4 +1,3 @@
-// autotrader-painel/components/ExitPanel.tsx
 import React, { useEffect, useRef, useState } from 'react';
 
 interface ExitPanelProps {
@@ -8,34 +7,20 @@ interface ExitPanelProps {
 type Side = 'LONG' | 'SHORT';
 type Mode = 'SWING' | 'POSICIONAL';
 
-// Estrutura da entrada vinda do /api/entrada (mesmo JSON do Painel ENTRADA)
-interface EntradaItem {
-  par: string;
-  modo: Mode;
-  preco: number;
-  alvo_1: number;
-  alvo_2: number;
-  alvo_3: number;
-}
-
-interface EntradaJson {
-  swing: EntradaItem[];
-  posicional: EntradaItem[];
-}
-
 interface Operation {
   id: number;
   par: string;
   side: Side;
   modo: Mode;
-  entrada: number;     // preço de entrada da operação
+  entrada: number;
+  preco: number;
   alvo_1: number;
   ganho_1_pct: number;
   alvo_2: number;
   ganho_2_pct: number;
   alvo_3: number;
   ganho_3_pct: number;
-  situacao: string;     // ABERTA / ALVO 1 / ALVO 2 / ALVO 3
+  situacao: string; // ABERTA / ALVO 1 / ALVO 2 / ALVO 3 / ENCERRADA
   data: string;
   hora: string;
   alav: number;
@@ -61,12 +46,9 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     alav: '',
   });
 
-  const [entradaData, setEntradaData] = useState<EntradaJson | null>(null);
   const loadedRef = useRef(false);
 
-  // ---------------------------------------------------------------------------
-  // 1) CARREGAR / SALVAR OPERAÇÕES NO LOCALSTORAGE (PARA NÃO SUMIR)
-  // ---------------------------------------------------------------------------
+  // Carregar operações salvas
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -83,6 +65,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, []);
 
+  // Salvar operações sempre que mudarem
   useEffect(() => {
     if (!loadedRef.current) return;
     try {
@@ -92,48 +75,10 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, [ops]);
 
-  // ---------------------------------------------------------------------------
-  // 2) BUSCAR DADOS DO /api/entrada PARA TER PREÇO ATUAL E ALVOS
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    const fetchEntrada = async () => {
-      try {
-        const res = await fetch('/api/entrada');
-        if (!res.ok) return;
-        const data = (await res.json()) as EntradaJson;
-        setEntradaData(data);
-      } catch (e) {
-        console.error('Erro ao buscar /api/entrada', e);
-      }
-    };
-
-    fetchEntrada();
-    const id = setInterval(fetchEntrada, 60_000); // atualiza periodicamente
-    return () => clearInterval(id);
-  }, []);
-
   const sortedCoins = [...coins].sort();
 
   const updateForm = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  // Encontra no JSON de ENTRADA o registro da moeda/modo
-  const encontrarEntrada = (par: string, modo: Mode): EntradaItem | undefined => {
-    if (!entradaData) return undefined;
-    const lista =
-      modo === 'SWING' ? entradaData.swing ?? [] : entradaData.posicional ?? [];
-    return lista.find((c) => c.par === par);
-  };
-
-  // Cálculo de ganho em % entre ENTRADA e ALVO (para LONG/SHORT)
-  const calcularGanho = (side: Side, entrada: number, alvo: number): number => {
-    if (!entrada || !alvo || entrada <= 0 || alvo <= 0) return 0;
-    if (side === 'LONG') {
-      return ((alvo - entrada) / entrada) * 100;
-    } else {
-      return ((entrada - alvo) / entrada) * 100;
-    }
   };
 
   const handleAdd = () => {
@@ -142,32 +87,26 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       return;
     }
 
-    const entrada = Number(String(form.entrada).replace(',', '.'));
-    const alav = Number(String(form.alav).replace(',', '.'));
+    const entradaNum = Number(String(form.entrada).replace(',', '.'));
+    const alavNum = Number(String(form.alav).replace(',', '.'));
 
-    if (!Number.isFinite(entrada) || entrada <= 0) {
+    if (!Number.isFinite(entradaNum) || entradaNum <= 0) {
       alert('Entrada inválida.');
       return;
     }
-    if (!Number.isFinite(alav) || alav <= 0) {
+    if (!Number.isFinite(alavNum) || alavNum <= 0) {
       alert('Alavancagem inválida.');
       return;
     }
 
-    // Dados de referência do Painel ENTRADA (preço atual e alvos oficiais)
-    const refEntrada = encontrarEntrada(form.par, form.modo);
-
-    const alvo1 = refEntrada?.alvo_1 ?? entrada;
-    const alvo2 = refEntrada?.alvo_2 ?? entrada;
-    const alvo3 = refEntrada?.alvo_3 ?? entrada;
-
-    const ganho1 = calcularGanho(form.side, entrada, alvo1);
-    const ganho2 = calcularGanho(form.side, entrada, alvo2);
-    const ganho3 = calcularGanho(form.side, entrada, alvo3);
-
     const agora = new Date();
     const data = agora.toISOString().slice(0, 10); // AAAA-MM-DD
     const hora = agora.toTimeString().slice(0, 5); // HH:MM
+
+    // Por enquanto, usamos a própria entrada como preço inicial.
+    // Alvos e ganhos serão calculados automaticamente pela automação no futuro.
+    const entrada = entradaNum;
+    const preco = entradaNum;
 
     const novaOp: Operation = {
       id: Date.now(),
@@ -175,16 +114,17 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       side: form.side,
       modo: form.modo,
       entrada,
-      alvo_1: alvo1,
-      ganho_1_pct: ganho1,
-      alvo_2: alvo2,
-      ganho_2_pct: ganho2,
-      alvo_3: alvo3,
-      ganho_3_pct: ganho3,
+      preco,
+      alvo_1: entrada,
+      ganho_1_pct: 0,
+      alvo_2: entrada,
+      ganho_2_pct: 0,
+      alvo_3: entrada,
+      ganho_3_pct: 0,
       situacao: 'ABERTA',
       data,
       hora,
-      alav,
+      alav: alavNum,
     };
 
     setOps((prev) => [...prev, novaOp]);
@@ -200,33 +140,19 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     setOps((prev) => prev.filter((op) => op.id !== id));
   };
 
-  // PREÇO ATUAL: pega do JSON de entrada (preço real do mercado)
-  const getPrecoAtual = (op: Operation): number => {
-    const refEntrada = encontrarEntrada(op.par, op.modo);
-    if (refEntrada?.preco && refEntrada.preco > 0) return refEntrada.preco;
-    // fallback: se não tiver dado recente, mostra a própria entrada
-    return op.entrada;
-  };
-
   const formatNumber = (value: number, decimals = 3) => value.toFixed(decimals);
   const formatPercent = (value: number) => value.toFixed(2);
 
-  // FILTRO POR PAR / SIDE / MODO (como no modelo da planilha)
-  const filteredOps = ops.filter(
-    (op) =>
-      op.par === form.par && op.side === form.side && op.modo === form.modo,
-  );
-
   return (
     <div className="space-y-4">
-      {/* Título */}
+      {/* TÍTULO */}
       <div>
         <h2 className="text-lg font-semibold text-[#ff7b1b] mb-1">
           MONITORAMENTO DE SAÍDA
         </h2>
       </div>
 
-      {/* Barra de filtros / entrada de operação */}
+      {/* BARRA DE ENTRADA DA OPERAÇÃO */}
       <div className="bg-[#0b2533] rounded-lg px-4 py-3 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 text-xs text-[#e7edf3]">
           {/* PAR */}
@@ -244,7 +170,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* SIDE */}
           <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] ${
+            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] ${
               form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
             }`}
             value={form.side}
@@ -267,7 +193,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* ENTRADA */}
           <input
             type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-24"
             placeholder="Entrada"
             value={form.entrada}
             onChange={(e) => updateForm('entrada', e.target.value)}
@@ -276,16 +202,16 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* ALAVANCAGEM */}
           <input
             type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-16"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
             placeholder="Alav"
             value={form.alav}
             onChange={(e) => updateForm('alav', e.target.value)}
           />
 
-          {/* BOTÃO ADICIONAR (ALINHADO COM A BARRA) */}
+          {/* BOTÃO ADICIONAR AO LADO DA ALAV */}
           <button
             onClick={handleAdd}
-            className="ml-auto bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
+            className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
           >
             Adicionar Operação
           </button>
@@ -300,115 +226,108 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
               <th className="px-2 py-2 w-14">PAR</th>
               <th className="px-2 py-2 w-14">SIDE</th>
               <th className="px-2 py-2 w-20">MODO</th>
-              <th className="px-2 py-2 w-20 text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-20 text-right">PREÇO</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-18 text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-18 text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-18 text-right">GANHO 3%</th>
+              <th className="px-2 py-2 w-24 text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-24 text-right">PREÇO</th>
+              <th className="px-2 py-2 w-24 text-right">ALVO 1 US</th>
+              <th className="px-2 py-2 w-20 text-right">GANHO 1%</th>
+              <th className="px-2 py-2 w-24 text-right">ALVO 2 US</th>
+              <th className="px-2 py-2 w-20 text-right">GANHO 2%</th>
+              <th className="px-2 py-2 w-24 text-right">ALVO 3 US</th>
+              <th className="px-2 py-2 w-20 text-right">GANHO 3%</th>
               <th className="px-2 py-2 w-24">SITUAÇÃO</th>
-              <th className="px-2 py-2 w-14 text-right">ALAV</th>
-              <th className="px-2 py-2 w-18">DATA</th>
-              <th className="px-2 py-2 w-14">HORA</th>
+              <th className="px-2 py-2 w-16 text-right">ALAV</th>
+              <th className="px-2 py-2 w-20">DATA</th>
+              <th className="px-2 py-2 w-16">HORA</th>
               <th className="px-2 py-2 w-20 text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
-            {filteredOps.length > 0 ? (
-              filteredOps.map((op) => {
-                const precoAtual = getPrecoAtual(op);
-
-                return (
-                  <tr
-                    key={op.id}
-                    className="border-t border-[#173446] hover:bg-[#102b3a]"
+            {ops.length > 0 ? (
+              ops.map((op) => (
+                <tr
+                  key={op.id}
+                  className="border-t border-[#173446] hover:bg-[#102b3a]"
+                >
+                  <td className="px-2 py-1 whitespace-nowrap">{op.par}</td>
+                  <td
+                    className={`px-2 py-1 whitespace-nowrap font-semibold ${
+                      op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
+                    }`}
                   >
-                    <td className="px-2 py-1 whitespace-nowrap">{op.par}</td>
+                    {op.side}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
 
-                    <td
-                      className={`px-2 py-1 whitespace-nowrap font-semibold ${
-                        op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
-                      }`}
+                  <td className="px-2 py-1 text-right">
+                    {formatNumber(op.entrada)}
+                  </td>
+                  <td className="px-2 py-1 text-right">
+                    {formatNumber(op.preco)}
+                  </td>
+
+                  <td className="px-2 py-1 text-right">
+                    {formatNumber(op.alvo_1)}
+                  </td>
+                  <td
+                    className={`px-2 py-1 text-right ${
+                      op.ganho_1_pct > 0
+                        ? 'text-green-400'
+                        : op.ganho_1_pct < 0
+                        ? 'text-red-400'
+                        : ''
+                    }`}
+                  >
+                    {formatPercent(op.ganho_1_pct)}%
+                  </td>
+
+                  <td className="px-2 py-1 text-right">
+                    {formatNumber(op.alvo_2)}
+                  </td>
+                  <td
+                    className={`px-2 py-1 text-right ${
+                      op.ganho_2_pct > 0
+                        ? 'text-green-400'
+                        : op.ganho_2_pct < 0
+                        ? 'text-red-400'
+                        : ''
+                    }`}
+                  >
+                    {formatPercent(op.ganho_2_pct)}%
+                  </td>
+
+                  <td className="px-2 py-1 text-right">
+                    {formatNumber(op.alvo_3)}
+                  </td>
+                  <td
+                    className={`px-2 py-1 text-right ${
+                      op.ganho_3_pct > 0
+                        ? 'text-green-400'
+                        : op.ganho_3_pct < 0
+                        ? 'text-red-400'
+                        : ''
+                    }`}
+                  >
+                    {formatPercent(op.ganho_3_pct)}%
+                  </td>
+
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    {op.situacao}
+                  </td>
+
+                  <td className="px-2 py-1 text-right">{op.alav}</td>
+                  <td className="px-2 py-1 whitespace-nowrap">{op.data}</td>
+                  <td className="px-2 py-1 whitespace-nowrap">{op.hora}</td>
+
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      onClick={() => handleDelete(op.id)}
+                      className="bg-red-600 hover:bg-red-700 text-[11px] font-semibold text-white px-3 py-1 rounded-md"
                     >
-                      {op.side}
-                    </td>
-
-                    <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
-
-                    <td className="px-2 py-1 text-right">
-                      {formatNumber(op.entrada)}
-                    </td>
-
-                    <td className="px-2 py-1 text-right">
-                      {formatNumber(precoAtual)}
-                    </td>
-
-                    <td className="px-2 py-1 text-right">
-                      {formatNumber(op.alvo_1)}
-                    </td>
-                    <td
-                      className={`px-2 py-1 text-right ${
-                        op.ganho_1_pct > 0
-                          ? 'text-green-400'
-                          : op.ganho_1_pct < 0
-                          ? 'text-red-400'
-                          : ''
-                      }`}
-                    >
-                      {formatPercent(op.ganho_1_pct)}%
-                    </td>
-
-                    <td className="px-2 py-1 text-right">
-                      {formatNumber(op.alvo_2)}
-                    </td>
-                    <td
-                      className={`px-2 py-1 text-right ${
-                        op.ganho_2_pct > 0
-                          ? 'text-green-400'
-                          : op.ganho_2_pct < 0
-                          ? 'text-red-400'
-                          : ''
-                      }`}
-                    >
-                      {formatPercent(op.ganho_2_pct)}%
-                    </td>
-
-                    <td className="px-2 py-1 text-right">
-                      {formatNumber(op.alvo_3)}
-                    </td>
-                    <td
-                      className={`px-2 py-1 text-right ${
-                        op.ganho_3_pct > 0
-                          ? 'text-green-400'
-                          : op.ganho_3_pct < 0
-                          ? 'text-red-400'
-                          : ''
-                      }`}
-                    >
-                      {formatPercent(op.ganho_3_pct)}%
-                    </td>
-
-                    <td className="px-2 py-1 whitespace-nowrap">
-                      {op.situacao}
-                    </td>
-
-                    <td className="px-2 py-1 text-right">{op.alav}</td>
-                    <td className="px-2 py-1 whitespace-nowrap">{op.data}</td>
-                    <td className="px-2 py-1 whitespace-nowrap">{op.hora}</td>
-
-                    <td className="px-2 py-1 text-center">
-                      <button
-                        onClick={() => handleDelete(op.id)}
-                        className="bg-red-600 hover:bg-red-700 text-[11px] font-semibold text-white px-3 py-1 rounded-md"
-                      >
-                        Excluir
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              ))
             ) : (
               <tr>
                 <td
