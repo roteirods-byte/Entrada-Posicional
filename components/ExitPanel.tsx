@@ -34,6 +34,11 @@ interface FormState {
   alav: string;
 }
 
+/**
+ * STORAGE_KEY:
+ * mantém as operações salvas no navegador.
+ * Assim, quando você recarregar a página, os dados continuam.
+ */
 const STORAGE_KEY = 'autotrader_exit_ops_v2';
 
 const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
@@ -48,10 +53,14 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
   const loadedRef = useRef(false);
 
-  // Carrega operações do localStorage
+  // ------------------------------------------------------------------
+  // Carrega operações do localStorage (salvar entre recarregamentos)
+  // ------------------------------------------------------------------
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      if (typeof window === 'undefined') return;
+
+      const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Operation[];
         if (Array.isArray(parsed)) {
@@ -65,11 +74,14 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, []);
 
-  // Salva operações no localStorage
+  // ------------------------------------------------------------------
+  // Salva operações no localStorage sempre que mudar a lista
+  // ------------------------------------------------------------------
   useEffect(() => {
     if (!loadedRef.current) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
+      if (typeof window === 'undefined') return;
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
     } catch (e) {
       console.error('Erro ao salvar operações', e);
     }
@@ -103,15 +115,22 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     const data = agora.toISOString().slice(0, 10); // AAAA-MM-DD
     const hora = agora.toTimeString().slice(0, 5); // HH:MM
 
-    // Por enquanto, ALVO 1/2/3 = ENTRADA e GANHOS = 0.
-    // Quando integrar com worker_saida, esses campos virão do JSON com preço real.
+    /**
+     * PREÇO:
+     * - Por enquanto, começa igual à ENTRADA.
+     * - Quando ligarmos o worker de SAÍDA, o PREÇO será atualizado
+     *   automaticamente com o valor real das corretoras
+     *   (igual ao painel de ENTRADA).
+     */
+    const precoAtual = entrada;
+
     const novaOp: Operation = {
       id: Date.now(),
       par: form.par,
       side: form.side,
       modo: form.modo,
       entrada,
-      preco: entrada,
+      preco: precoAtual,
       alvo_1: entrada,
       ganho_1_pct: 0,
       alvo_2: entrada,
@@ -137,9 +156,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     setOps((prev) => prev.filter((op) => op.id !== id));
   };
 
-  const formatNumber = (value: number, decimals = 3) =>
-    value.toFixed(decimals);
-
+  const formatNumber = (value: number, decimals = 3) => value.toFixed(decimals);
   const formatPercent = (value: number) => value.toFixed(2);
 
   return (
@@ -156,7 +173,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <div className="flex flex-wrap items-center gap-3 text-xs text-[#e7edf3]">
           {/* PAR */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#ff7b1b] min-w-[70px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] text-[#ff7b1b]"
             value={form.par}
             onChange={(e) => updateForm('par', e.target.value)}
           >
@@ -169,7 +186,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* SIDE */}
           <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] ${
+            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] ${
               form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
             }`}
             value={form.side}
@@ -207,7 +224,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
             onChange={(e) => updateForm('alav', e.target.value)}
           />
 
-          {/* Botão logo depois do campo Alav */}
+          {/* BOTÃO ADICIONAR – agora colado no campo de ALAV */}
           <button
             onClick={handleAdd}
             className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
@@ -222,22 +239,22 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <table className="min-w-full bg-[#0b2533] text-xs text-left text-[#e7edf3]">
           <thead className="bg-[#1e3a4c] text-[11px] uppercase text-[#ff7b1b]">
             <tr>
-              <th className="px-2 py-2 w-[50px]">PAR</th>
-              <th className="px-2 py-2 w-[60px]">SIDE</th>
-              <th className="px-2 py-2 w-[80px]">MODO</th>
-              <th className="px-2 py-2 w-[80px] text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-[80px] text-right">PREÇO</th>
-              <th className="px-2 py-2 w-[80px] text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-[80px] text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-[80px] text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-[80px] text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-[80px] text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-[80px] text-right">GANHO 3%</th>
-              <th className="px-2 py-2 w-[80px]">SITUAÇÃO</th>
-              <th className="px-2 py-2 w-[60px] text-right">ALAV</th>
-              <th className="px-2 py-2 w-[80px]">DATA</th>
-              <th className="px-2 py-2 w-[60px]">HORA</th>
-              <th className="px-2 py-2 w-[70px] text-center">EXCLUIR</th>
+              <th className="px-2 py-2 w-14">PAR</th>
+              <th className="px-2 py-2 w-14">SIDE</th>
+              <th className="px-2 py-2 w-18">MODO</th>
+              <th className="px-2 py-2 w-20 text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-20 text-right">PREÇO</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 1 US</th>
+              <th className="px-2 py-2 w-18 text-right">GANHO 1%</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 2 US</th>
+              <th className="px-2 py-2 w-18 text-right">GANHO 2%</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 3 US</th>
+              <th className="px-2 py-2 w-18 text-right">GANHO 3%</th>
+              <th className="px-2 py-2 w-24">SITUAÇÃO</th>
+              <th className="px-2 py-2 w-14 text-right">ALAV</th>
+              <th className="px-2 py-2 w-18">DATA</th>
+              <th className="px-2 py-2 w-14">HORA</th>
+              <th className="px-2 py-2 w-18 text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
@@ -248,6 +265,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                   className="border-t border-[#173446] hover:bg-[#102b3a]"
                 >
                   <td className="px-2 py-1 whitespace-nowrap">{op.par}</td>
+
                   <td
                     className={`px-2 py-1 whitespace-nowrap font-semibold ${
                       op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
@@ -255,6 +273,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                   >
                     {op.side}
                   </td>
+
                   <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
 
                   <td className="px-2 py-1 text-right">
