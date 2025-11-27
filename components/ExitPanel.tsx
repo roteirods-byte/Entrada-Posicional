@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface ExitPanelProps {
   coins: string[];
@@ -46,30 +46,27 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     alav: '',
   });
 
-  const loadedRef = useRef(false);
-
   // Carregar operações salvas
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Operation[];
-        if (Array.isArray(parsed)) {
-          setOps(parsed);
-        }
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as Operation[];
+      if (Array.isArray(parsed)) {
+        setOps(parsed);
       }
     } catch (e) {
       console.error('Erro ao carregar operações do localStorage', e);
-    } finally {
-      loadedRef.current = true;
     }
   }, []);
 
   // Salvar operações sempre que mudarem
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
     } catch (e) {
       console.error('Erro ao salvar operações', e);
     }
@@ -103,10 +100,8 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     const data = agora.toISOString().slice(0, 10); // AAAA-MM-DD
     const hora = agora.toTimeString().slice(0, 5); // HH:MM
 
-    // Por enquanto, usamos a própria entrada como preço inicial.
-    // Alvos e ganhos serão calculados automaticamente pela automação no futuro.
     const entrada = entradaNum;
-    const preco = entradaNum;
+    const preco = entradaNum; // será atualizado pela automação depois
 
     const novaOp: Operation = {
       id: Date.now(),
@@ -153,11 +148,11 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       </div>
 
       {/* BARRA DE ENTRADA DA OPERAÇÃO */}
-      <div className="bg-[#0b2533] rounded-lg px-4 py-3 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-[#e7edf3]">
+      <div className="bg-[#0b2533] rounded-lg px-3 py-2 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[#e7edf3]">
           {/* PAR */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#ff7b1b] min-w-[80px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#ff7b1b] min-w-[70px]"
             value={form.par}
             onChange={(e) => updateForm('par', e.target.value)}
           >
@@ -170,7 +165,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* SIDE */}
           <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] ${
+            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[60px] ${
               form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
             }`}
             value={form.side}
@@ -182,7 +177,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* MODO */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[90px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[80px]"
             value={form.modo}
             onChange={(e) => updateForm('modo', e.target.value as Mode)}
           >
@@ -193,7 +188,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* ENTRADA */}
           <input
             type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-24"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
             placeholder="Entrada"
             value={form.entrada}
             onChange={(e) => updateForm('entrada', e.target.value)}
@@ -202,7 +197,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* ALAVANCAGEM */}
           <input
             type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-16"
             placeholder="Alav"
             value={form.alav}
             onChange={(e) => updateForm('alav', e.target.value)}
@@ -211,9 +206,9 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* BOTÃO ADICIONAR AO LADO DA ALAV */}
           <button
             onClick={handleAdd}
-            className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
+            className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1 rounded-md"
           >
-            Adicionar Operação
+            ADICIONAR
           </button>
         </div>
       </div>
@@ -223,22 +218,22 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <table className="min-w-full bg-[#0b2533] text-xs text-left text-[#e7edf3]">
           <thead className="bg-[#1e3a4c] text-[11px] uppercase text-[#ff7b1b]">
             <tr>
-              <th className="px-2 py-2 w-14">PAR</th>
-              <th className="px-2 py-2 w-14">SIDE</th>
-              <th className="px-2 py-2 w-20">MODO</th>
-              <th className="px-2 py-2 w-24 text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-24 text-right">PREÇO</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 3%</th>
-              <th className="px-2 py-2 w-24">SITUAÇÃO</th>
-              <th className="px-2 py-2 w-16 text-right">ALAV</th>
-              <th className="px-2 py-2 w-20">DATA</th>
-              <th className="px-2 py-2 w-16">HORA</th>
-              <th className="px-2 py-2 w-20 text-center">EXCLUIR</th>
+              <th className="px-2 py-2 w-12">PAR</th>
+              <th className="px-2 py-2 w-12">SIDE</th>
+              <th className="px-2 py-2 w-16">MODO</th>
+              <th className="px-2 py-2 w-20 text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-20 text-right">PREÇO</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 1 US</th>
+              <th className="px-2 py-2 w-16 text-right">GANHO 1%</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 2 US</th>
+              <th className="px-2 py-2 w-16 text-right">GANHO 2%</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 3 US</th>
+              <th className="px-2 py-2 w-16 text-right">GANHO 3%</th>
+              <th className="px-2 py-2 w-20">SITUAÇÃO</th>
+              <th className="px-2 py-2 w-14 text-right">ALAV</th>
+              <th className="px-2 py-2 w-18">DATA</th>
+              <th className="px-2 py-2 w-14">HORA</th>
+              <th className="px-2 py-2 w-18 text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
