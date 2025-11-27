@@ -1,3 +1,4 @@
+// autotrader-painel/components/ExitPanel.tsx
 import React, { useEffect, useRef, useState } from 'react';
 
 interface ExitPanelProps {
@@ -7,20 +8,34 @@ interface ExitPanelProps {
 type Side = 'LONG' | 'SHORT';
 type Mode = 'SWING' | 'POSICIONAL';
 
+// Estrutura da entrada vinda do /api/entrada (mesmo JSON do Painel ENTRADA)
+interface EntradaItem {
+  par: string;
+  modo: Mode;
+  preco: number;
+  alvo_1: number;
+  alvo_2: number;
+  alvo_3: number;
+}
+
+interface EntradaJson {
+  swing: EntradaItem[];
+  posicional: EntradaItem[];
+}
+
 interface Operation {
   id: number;
   par: string;
   side: Side;
   modo: Mode;
-  entrada: number;
-  preco: number;
+  entrada: number;     // preço de entrada da operação
   alvo_1: number;
   ganho_1_pct: number;
   alvo_2: number;
   ganho_2_pct: number;
   alvo_3: number;
   ganho_3_pct: number;
-  situacao: string; // ABERTA / ALVO 1 / ALVO 2 / ALVO 3
+  situacao: string;     // ABERTA / ALVO 1 / ALVO 2 / ALVO 3
   data: string;
   hora: string;
   alav: number;
@@ -34,22 +49,7 @@ interface FormState {
   alav: string;
 }
 
-// Resposta do /api/entrada (simplificada)
-interface EntradaItem {
-  par: string;
-  modo: Mode;
-  preco: number;
-}
-
-interface EntradaResponse {
-  swing?: EntradaItem[];
-  posicional?: EntradaItem[];
-}
-
-type PriceMap = Record<string, number>;
-
 const STORAGE_KEY = 'autotrader_exit_ops_v2';
-const ENTRADA_API_URL = '/api/entrada';
 
 const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
   const [ops, setOps] = useState<Operation[]>([]);
@@ -61,38 +61,19 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     alav: '',
   });
 
-  // mapa com o preço atual por (modo + par), vindo do painel ENTRADA
-  const [priceMap, setPriceMap] = useState<PriceMap>({});
+  const [entradaData, setEntradaData] = useState<EntradaJson | null>(null);
   const loadedRef = useRef(false);
 
-  // -----------------------------
-  // 1) Carregar / salvar operações no localStorage
-  // -----------------------------
+  // ---------------------------------------------------------------------------
+  // 1) CARREGAR / SALVAR OPERAÇÕES NO LOCALSTORAGE (PARA NÃO SUMIR)
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as any[];
+        const parsed = JSON.parse(raw) as Operation[];
         if (Array.isArray(parsed)) {
-          const normalizado: Operation[] = parsed.map((op, idx) => ({
-            id: typeof op.id === 'number' ? op.id : Date.now() + idx,
-            par: String(op.par ?? 'AAVE').toUpperCase(),
-            side: op.side === 'SHORT' ? 'SHORT' : 'LONG',
-            modo: op.modo === 'POSICIONAL' ? 'POSICIONAL' : 'SWING',
-            entrada: Number(op.entrada ?? 0),
-            preco: Number(op.preco ?? op.entrada ?? 0),
-            alvo_1: Number(op.alvo_1 ?? op.entrada ?? 0),
-            ganho_1_pct: Number(op.ganho_1_pct ?? 0),
-            alvo_2: Number(op.alvo_2 ?? op.entrada ?? 0),
-            ganho_2_pct: Number(op.ganho_2_pct ?? 0),
-            alvo_3: Number(op.alvo_3 ?? op.entrada ?? 0),
-            ganho_3_pct: Number(op.ganho_3_pct ?? 0),
-            situacao: String(op.situacao ?? 'ABERTA'),
-            data: String(op.data ?? ''),
-            hora: String(op.hora ?? ''),
-            alav: Number(op.alav ?? 1),
-          }));
-          setOps(normalizado);
+          setOps(parsed);
         }
       }
     } catch (e) {
@@ -111,37 +92,23 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, [ops]);
 
-  // -----------------------------
-  // 2) Buscar PREÇO real do painel ENTRADA (/api/entrada)
-  // -----------------------------
+  // ---------------------------------------------------------------------------
+  // 2) BUSCAR DADOS DO /api/entrada PARA TER PREÇO ATUAL E ALVOS
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const fetchPrices = async () => {
+    const fetchEntrada = async () => {
       try {
-        const res = await fetch(ENTRADA_API_URL);
+        const res = await fetch('/api/entrada');
         if (!res.ok) return;
-
-        const data: EntradaResponse = await res.json();
-        const map: PriceMap = {};
-
-        const addArray = (arr?: EntradaItem[]) => {
-          if (!Array.isArray(arr)) return;
-          arr.forEach((item) => {
-            const key = `${item.modo}-${item.par}`.toUpperCase();
-            map[key] = Number(item.preco ?? 0);
-          });
-        };
-
-        addArray(data.swing);
-        addArray(data.posicional);
-
-        setPriceMap(map);
+        const data = (await res.json()) as EntradaJson;
+        setEntradaData(data);
       } catch (e) {
-        console.error('Erro ao buscar preços atuais de entrada', e);
+        console.error('Erro ao buscar /api/entrada', e);
       }
     };
 
-    fetchPrices();
-    const id = setInterval(fetchPrices, 60_000); // atualiza a cada 60s
+    fetchEntrada();
+    const id = setInterval(fetchEntrada, 60_000); // atualiza periodicamente
     return () => clearInterval(id);
   }, []);
 
@@ -149,6 +116,24 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
   const updateForm = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Encontra no JSON de ENTRADA o registro da moeda/modo
+  const encontrarEntrada = (par: string, modo: Mode): EntradaItem | undefined => {
+    if (!entradaData) return undefined;
+    const lista =
+      modo === 'SWING' ? entradaData.swing ?? [] : entradaData.posicional ?? [];
+    return lista.find((c) => c.par === par);
+  };
+
+  // Cálculo de ganho em % entre ENTRADA e ALVO (para LONG/SHORT)
+  const calcularGanho = (side: Side, entrada: number, alvo: number): number => {
+    if (!entrada || !alvo || entrada <= 0 || alvo <= 0) return 0;
+    if (side === 'LONG') {
+      return ((alvo - entrada) / entrada) * 100;
+    } else {
+      return ((entrada - alvo) / entrada) * 100;
+    }
   };
 
   const handleAdd = () => {
@@ -169,12 +154,20 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       return;
     }
 
+    // Dados de referência do Painel ENTRADA (preço atual e alvos oficiais)
+    const refEntrada = encontrarEntrada(form.par, form.modo);
+
+    const alvo1 = refEntrada?.alvo_1 ?? entrada;
+    const alvo2 = refEntrada?.alvo_2 ?? entrada;
+    const alvo3 = refEntrada?.alvo_3 ?? entrada;
+
+    const ganho1 = calcularGanho(form.side, entrada, alvo1);
+    const ganho2 = calcularGanho(form.side, entrada, alvo2);
+    const ganho3 = calcularGanho(form.side, entrada, alvo3);
+
     const agora = new Date();
     const data = agora.toISOString().slice(0, 10); // AAAA-MM-DD
     const hora = agora.toTimeString().slice(0, 5); // HH:MM
-
-    const key = `${form.modo}-${form.par}`.toUpperCase();
-    const precoAtual = priceMap[key] ?? entrada;
 
     const novaOp: Operation = {
       id: Date.now(),
@@ -182,15 +175,12 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       side: form.side,
       modo: form.modo,
       entrada,
-      preco: precoAtual,
-      // por enquanto os alvos são iguais à entrada;
-      // ganhos ficam 0 até integrar com worker_saida.
-      alvo_1: entrada,
-      ganho_1_pct: 0,
-      alvo_2: entrada,
-      ganho_2_pct: 0,
-      alvo_3: entrada,
-      ganho_3_pct: 0,
+      alvo_1: alvo1,
+      ganho_1_pct: ganho1,
+      alvo_2: alvo2,
+      ganho_2_pct: ganho2,
+      alvo_3: alvo3,
+      ganho_3_pct: ganho3,
       situacao: 'ABERTA',
       data,
       hora,
@@ -210,11 +200,22 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     setOps((prev) => prev.filter((op) => op.id !== id));
   };
 
-  const formatNumber = (value: number, decimals = 3) =>
-    Number.isFinite(value) ? value.toFixed(decimals) : '0.000';
+  // PREÇO ATUAL: pega do JSON de entrada (preço real do mercado)
+  const getPrecoAtual = (op: Operation): number => {
+    const refEntrada = encontrarEntrada(op.par, op.modo);
+    if (refEntrada?.preco && refEntrada.preco > 0) return refEntrada.preco;
+    // fallback: se não tiver dado recente, mostra a própria entrada
+    return op.entrada;
+  };
 
-  const formatPercent = (value: number) =>
-    Number.isFinite(value) ? value.toFixed(2) : '0.00';
+  const formatNumber = (value: number, decimals = 3) => value.toFixed(decimals);
+  const formatPercent = (value: number) => value.toFixed(2);
+
+  // FILTRO POR PAR / SIDE / MODO (como no modelo da planilha)
+  const filteredOps = ops.filter(
+    (op) =>
+      op.par === form.par && op.side === form.side && op.modo === form.modo,
+  );
 
   return (
     <div className="space-y-4">
@@ -230,7 +231,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
         <div className="flex flex-wrap items-center gap-3 text-xs text-[#e7edf3]">
           {/* PAR */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] text-[#ff7b1b]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#ff7b1b] min-w-[80px]"
             value={form.par}
             onChange={(e) => updateForm('par', e.target.value)}
           >
@@ -243,7 +244,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* SIDE */}
           <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[70px] ${
+            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[80px] ${
               form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
             }`}
             value={form.side}
@@ -255,7 +256,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
 
           {/* MODO */}
           <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[95px]"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[90px]"
             value={form.modo}
             onChange={(e) => updateForm('modo', e.target.value as Mode)}
           >
@@ -266,7 +267,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
           {/* ENTRADA */}
           <input
             type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-24"
+            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
             placeholder="Entrada"
             value={form.entrada}
             onChange={(e) => updateForm('entrada', e.target.value)}
@@ -281,10 +282,10 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
             onChange={(e) => updateForm('alav', e.target.value)}
           />
 
-          {/* Botão adicionar grudado na barra */}
+          {/* BOTÃO ADICIONAR (ALINHADO COM A BARRA) */}
           <button
             onClick={handleAdd}
-            className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
+            className="ml-auto bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1.5 rounded-md"
           >
             Adicionar Operação
           </button>
@@ -299,26 +300,25 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
               <th className="px-2 py-2 w-14">PAR</th>
               <th className="px-2 py-2 w-14">SIDE</th>
               <th className="px-2 py-2 w-20">MODO</th>
-              <th className="px-2 py-2 w-24 text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-24 text-right">PREÇO</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-24 text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-20 text-right">GANHO 3%</th>
+              <th className="px-2 py-2 w-20 text-right">ENTRADA</th>
+              <th className="px-2 py-2 w-20 text-right">PREÇO</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 1 US</th>
+              <th className="px-2 py-2 w-18 text-right">GANHO 1%</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 2 US</th>
+              <th className="px-2 py-2 w-18 text-right">GANHO 2%</th>
+              <th className="px-2 py-2 w-20 text-right">ALVO 3 US</th>
+              <th className="px-2 py-2 w-18 text-right">GANHO 3%</th>
               <th className="px-2 py-2 w-24">SITUAÇÃO</th>
               <th className="px-2 py-2 w-14 text-right">ALAV</th>
-              <th className="px-2 py-2 w-20">DATA</th>
-              <th className="px-2 py-2 w-16">HORA</th>
+              <th className="px-2 py-2 w-18">DATA</th>
+              <th className="px-2 py-2 w-14">HORA</th>
               <th className="px-2 py-2 w-20 text-center">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
-            {ops.length > 0 ? (
-              ops.map((op) => {
-                const key = `${op.modo}-${op.par}`.toUpperCase();
-                const precoAtual = priceMap[key] ?? op.preco;
+            {filteredOps.length > 0 ? (
+              filteredOps.map((op) => {
+                const precoAtual = getPrecoAtual(op);
 
                 return (
                   <tr
@@ -326,6 +326,7 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                     className="border-t border-[#173446] hover:bg-[#102b3a]"
                   >
                     <td className="px-2 py-1 whitespace-nowrap">{op.par}</td>
+
                     <td
                       className={`px-2 py-1 whitespace-nowrap font-semibold ${
                         op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
@@ -333,11 +334,13 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
                     >
                       {op.side}
                     </td>
+
                     <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
 
                     <td className="px-2 py-1 text-right">
                       {formatNumber(op.entrada)}
                     </td>
+
                     <td className="px-2 py-1 text-right">
                       {formatNumber(precoAtual)}
                     </td>
