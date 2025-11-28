@@ -9,7 +9,7 @@ const PORT = process.env.BACKEND_PORT || 8080;
 // CAMINHO DO JSON GERADO PELO WORKER
 const DATA_FILE =
   process.env.ENTRADA_JSON_PATH ||
-  "/home/roteiro_ds/autotrader-planilhas-python/entrada.json";
+ "/home/roteiro_ds/autotrader-planilhas-python/data/entrada.json";
 
 const app = express();
 app.use(cors());
