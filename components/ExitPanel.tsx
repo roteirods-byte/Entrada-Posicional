@@ -36,6 +36,14 @@ interface FormState {
 
 const STORAGE_KEY = 'autotrader_exit_ops_v2';
 
+type ManualOpPayload = {
+  par: string;
+  side: Side;
+  modo: Mode;
+  entrada: number;
+  alav: number;
+};
+
 const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
   const [ops, setOps] = useState<Operation[]>([]);
   const [form, setForm] = useState<FormState>({
@@ -46,7 +54,78 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     alav: '',
   });
 
-  // Carregar operações salvas
+  const sortedCoins = [...coins].sort();
+
+  const updateForm = (field: keyof FormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // ---------- SINCRONIZAÇÃO COM BACKEND ----------
+
+  const syncManualOps = async (list: Operation[]) => {
+    if (typeof window === 'undefined') return;
+
+    const payload: ManualOpPayload[] = list.map((op) => ({
+      par: op.par,
+      side: op.side,
+      modo: op.modo,
+      entrada: op.entrada,
+      alav: op.alav,
+    }));
+
+    try {
+      await fetch('/saida/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      console.error('Erro ao sincronizar operações manuais com backend', e);
+    }
+  };
+
+  const fetchMonitorData = async () => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const res = await fetch('/saida');
+      if (!res.ok) {
+        return;
+      }
+
+      const data = await res.json();
+
+      // Espera que /saida devolva um array de operações no formato Operation
+      if (Array.isArray(data)) {
+        // Garante que cada operação tenha um id (caso backend não mande)
+        const withIds: Operation[] = data.map((op: any, idx: number) => ({
+          id: typeof op.id === 'number' ? op.id : Date.now() + idx,
+          par: op.par,
+          side: op.side,
+          modo: op.modo,
+          entrada: op.entrada,
+          preco: op.preco,
+          alvo_1: op.alvo_1,
+          ganho_1_pct: op.ganho_1_pct,
+          alvo_2: op.alvo_2,
+          ganho_2_pct: op.ganho_2_pct,
+          alvo_3: op.alvo_3,
+          ganho_3_pct: op.ganho_3_pct,
+          situacao: op.situacao,
+          data: op.data,
+          hora: op.hora,
+          alav: op.alav,
+        }));
+
+        setOps(withIds);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar dados de saída do backend', e);
+    }
+  };
+
+  // ---------- CARREGAR DO LOCALSTORAGE NA PRIMEIRA VEZ ----------
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -62,7 +141,8 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, []);
 
-  // Salvar operações sempre que mudarem
+  // ---------- SALVAR NO LOCALSTORAGE SEMPRE QUE MUDAR ----------
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -72,13 +152,20 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }
   }, [ops]);
 
-  const sortedCoins = [...coins].sort();
+  // ---------- BUSCAR MONITORAMENTO PROFISSIONAL PERIODICAMENTE ----------
 
-  const updateForm = (field: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  useEffect(() => {
+    // primeira leitura
+    fetchMonitorData();
 
-  const handleAdd = () => {
+    // atualiza a cada 15 segundos
+    const id = window.setInterval(fetchMonitorData, 15000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // ---------- AÇÕES DO FORMULÁRIO ----------
+
+  const handleAdd = async () => {
     if (!form.par || !form.entrada.trim() || !form.alav.trim()) {
       alert('Preencha PAR, ENTRADA e ALAV.');
       return;
@@ -122,7 +209,11 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
       alav: alavNum,
     };
 
-    setOps((prev) => [...prev, novaOp]);
+    const novaLista = [...ops, novaOp];
+    setOps(novaLista);
+
+    // envia operações manuais para o backend
+    await syncManualOps(novaLista);
 
     setForm((prev) => ({
       ...prev,
@@ -131,8 +222,12 @@ const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
     }));
   };
 
-  const handleDelete = (id: number) => {
-    setOps((prev) => prev.filter((op) => op.id !== id));
+  const handleDelete = async (id: number) => {
+    const novaLista = ops.filter((op) => op.id !== id);
+    setOps(novaLista);
+
+    // envia lista atualizada para o backend
+    await syncManualOps(novaLista);
   };
 
   const formatNumber = (value: number, decimals = 3) => value.toFixed(decimals);
