@@ -102,32 +102,39 @@ const EntryPanel: React.FC = () => {
   const [data, setData] = useState<EntradaResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
 
   useEffect(() => {
     async function carregar() {
       try {
-        setLoading(true);
         setErro(null);
-        const resp = await fetch("/api/entrada");
+        const resp = await fetch(`/api/entrada?t=${Date.now()}`);
         if (!resp.ok) {
           throw new Error("Erro ao buscar /api/entrada");
         }
         const json = (await resp.json()) as EntradaResponse;
         setData(json);
+
+        const agora = new Date();
+        const hh = String(agora.getHours()).padStart(2, "0");
+        const mm = String(agora.getMinutes()).padStart(2, "0");
+        setLastUpdate(`${hh}:${mm}`);
       } catch (e: any) {
         console.error(e);
-        setErro("Falha ao carregar dados de entrada.");
+        setErro("Erro ao carregar dados de entrada.");
       } finally {
         setLoading(false);
       }
     }
 
+    // primeira carga
     carregar();
-    const id = setInterval(carregar, 60_000); // atualiza a cada 60s
+    // recarregar a cada 5 minutos (300.000 ms)
+    const id = setInterval(carregar, 300_000);
     return () => clearInterval(id);
   }, []);
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="bg-slate-900 rounded-xl p-4 text-white">
         Carregando dados de entrada...
@@ -145,9 +152,17 @@ const EntryPanel: React.FC = () => {
 
   return (
     <div className="bg-slate-950 rounded-2xl p-4 text-white">
-      <h1 className="text-2xl font-bold text-orange-400 mb-4 text-center">
-        Painel de Entrada
-      </h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold text-orange-400">
+          Painel de Entrada
+        </h1>
+        <div className="text-sm text-orange-300">
+          Dados atualizados às:{" "}
+          <span className="font-mono">
+            {lastUpdate ?? "--:--"}
+          </span>
+        </div>
+      </div>
 
       <div className="flex flex-col lg:flex-row">
         <TabelaModo titulo="SWING (4H)" registros={data.swing || []} />
