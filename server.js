@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const PORT = 8080;
@@ -7,8 +8,13 @@ const PORT = 8080;
 // Permite receber JSON no corpo das requisições
 app.use(express.json());
 
+// Caminho da pasta com os arquivos estáticos do Vite (build)
+const DIST_PATH = path.join(__dirname, "dist");
+
+// Servir o front-end já compilado (dist)
+app.use(express.static(DIST_PATH));
+
 // Caminhos ABSOLUTOS dos arquivos gerados pelo backend Python
-// Ajuste apenas se o seu backend estiver em outro lugar.
 const ENTRADA_PATH =
   "/home/roteiro_ds/autotrader-planilhas-python/data/entrada.json";
 
@@ -57,9 +63,7 @@ app.get("/api/entrada", (req, res) => {
 
 // --------- /saida (monitoramento automático - SAÍDA 2) ---------
 app.get("/saida", (req, res) => {
-  // Espera que o worker_saida.py gere saida_monitoramento.json
   const dados = lerJsonSeguro(SAIDA_MONITORAMENTO_PATH, []);
-  // dados deve ser uma lista de operações
   return res.json(dados);
 });
 
@@ -72,14 +76,6 @@ app.get("/saida/manual", (req, res) => {
 });
 
 // POST: adiciona uma nova operação manual
-// Espera um JSON no corpo, ex:
-// {
-//   "par": "BTC",
-//   "side": "LONG",
-//   "modo": "SWING",
-//   "entrada": 68000.0,
-//   "alav": 10
-// }
 app.post("/saida/manual", (req, res) => {
   const novaOperacao = req.body;
 
@@ -105,7 +101,12 @@ app.post("/saida/manual", (req, res) => {
   return res.json({ ok: true, total: listaAtual.length });
 });
 
+// --------- ROTA CORINGA: devolve o index.html do Vite ---------
+app.get("*", (req, res) => {
+  res.sendFile(path.join(DIST_PATH, "index.html"));
+});
+
 // --------- INICIALIZAÇÃO DO SERVIDOR ---------
 app.listen(PORT, () => {
-  console.log(`Servidor API rodando na porta ${PORT} (http://localhost:${PORT})`);
+  console.log(`Servidor AUTOTRADER rodando na porta ${PORT}`);
 });
