@@ -1,105 +1,42 @@
-// server.js – backend simples para o AUTOTRADER
-// Lê o JSON gerado pelo worker_entrada.py e devolve para o painel.
-
 const express = require("express");
-const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 
 const app = express();
+const PORT = 8080;
 
-app.use(cors());
-app.use(express.json());
+// Caminho ABSOLUTO do JSON gerado pelo worker_entrada.py
+// (ajuste somente se o seu backend estiver em outro lugar)
+const ENTRADA_PATH = "/home/roteiro_ds/autotrader-planilhas-python/data/entrada.json";
 
-// =========================
-// CONFIG BÁSICA
-// =========================
-
-const PORT = process.env.PORT || 8080;
-
-const DEFAULT_ENTRADA_PATH =
-  "/home/roteiro_ds/autotrader-planilhas-python/data/entrada.json";
-
-const DATA_FILE = process.env.ENTRADA_JSON_PATH || DEFAULT_ENTRADA_PATH;
-
-console.log("[server] Usando arquivo de entrada:", DATA_FILE);
-
-// =========================
-// FUNÇÃO AUXILIAR
-// =========================
-
-function lerJsonSeguro(filePath) {
+// --------- FUNÇÃO DE LEITURA E NORMALIZAÇÃO ---------
+function lerEntradaJson() {
   try {
-    const raw = fs.readFileSync(filePath, "utf8");
+    if (!fs.existsSync(ENTRADA_PATH)) {
+      console.warn("[api/entrada] Arquivo não encontrado:", ENTRADA_PATH);
+      return { swing: [], posicional: [] };
+    }
+
+    const raw = fs.readFileSync(ENTRADA_PATH, "utf-8");
     const parsed = JSON.parse(raw);
 
-    console.log(
-      "[server] JSON carregado com sucesso:",
-      filePath,
-      "tipo raiz:",
-      typeof parsed
-    );
+    const swing = Array.isArray(parsed.swing) ? parsed.swing : [];
+    const posicional = Array.isArray(parsed.posicional) ? parsed.posicional : [];
 
-    return parsed;
+    return { swing, posicional };
   } catch (err) {
-    console.error("[server] Erro ao ler JSON:", filePath, err.message);
-    return null;
+    console.error("[api/entrada] Erro ao ler/parsing entrada.json:", err);
+    return { swing: [], posicional: [] };
   }
 }
 
-// =========================
-// ROTAS
-// =========================
-
-// Health-check simples
-app.get("/health", (req, res) => {
-  const existe = fs.existsSync(DATA_FILE);
-  res.json({
-    status: "ok",
-    entrada_json_exists: existe,
-    entrada_json_path: DATA_FILE,
-  });
+// --------- ROTA DE API: /api/entrada ---------
+app.get("/api/entrada", (req, res) => {
+  const dados = lerEntradaJson();
+  return res.json(dados);
 });
 
-// Rota principal de ENTRADA
-app.get("/entrada", (req, res) => {
-  const dados = lerJsonSeguro(DATA_FILE);
-
-  if (!dados) {
-    return res.status(500).json({
-      erro: "Nao foi possivel ler o arquivo de entrada",
-      arquivo: DATA_FILE,
-    });
-  }
-
-  // Se o arquivo já tem o formato { swing: [...], posicional: [...] },
-  // devolvemos exatamente isso para o painel.
-  if (Array.isArray(dados)) {
-    // Proteção: se por algum motivo o arquivo virou array,
-    // devolvemos como swing e posicional vazios.
-    console.warn(
-      "[server] Aviso: entrada.json no formato de array. Esperado objeto com swing/posicional."
-    );
-    return res.json({ swing: [], posicional: [] });
-  }
-
-  const swing = Array.isArray(dados.swing) ? dados.swing : [];
-  const posicional = Array.isArray(dados.posicional) ? dados.posicional : [];
-
-  console.log(
-    `[server] Respondendo /entrada com ${swing.length} swing e ${posicional.length} posicional`
-  );
-
-  res.json({
-    swing,
-    posicional,
-  });
-});
-
-// =========================
-// SUBIR O SERVIDOR
-// =========================
-
+// --------- INICIALIZAÇÃO DO SERVIDOR ---------
 app.listen(PORT, () => {
-  console.log(`[server] Backend rodando na porta ${PORT}`);
+  console.log(`Servidor API rodando na porta ${PORT} (http://localhost:${PORT})`);
 });
