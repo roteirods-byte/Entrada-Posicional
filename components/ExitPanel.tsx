@@ -1,432 +1,279 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 
-interface ExitPanelProps {
-  coins: string[];
-}
+type Side = "LONG" | "SHORT";
+type Modo = "SWING" | "POSICIONAL";
 
-type Side = 'LONG' | 'SHORT';
-type Mode = 'SWING' | 'POSICIONAL';
-
-interface Operation {
-  id: number;
+type OperacaoSaida = {
+  id: string;
   par: string;
   side: Side;
-  modo: Mode;
+  modo: Modo;
   entrada: number;
   preco: number;
   alvo_1: number;
-  ganho_1_pct: number;
   alvo_2: number;
-  ganho_2_pct: number;
   alvo_3: number;
+  ganho_1_pct: number;
+  ganho_2_pct: number;
   ganho_3_pct: number;
-  situacao: string; // ABERTA / ALVO 1 / ALVO 2 / ALVO 3 / ENCERRADA
-  data: string;
-  hora: string;
+  pnl_pct: number;
+  situacao: string;
   alav: number;
-}
-
-interface FormState {
-  par: string;
-  side: Side;
-  modo: Mode;
-  entrada: string;
-  alav: string;
-}
-
-const STORAGE_KEY = 'autotrader_exit_ops_v2';
-
-type ManualOpPayload = {
-  par: string;
-  side: Side;
-  modo: Mode;
-  entrada: number;
-  alav: number;
+  data: string; // AAAA-MM-DD
+  hora: string; // HH:MM
 };
 
-const ExitPanel: React.FC<ExitPanelProps> = ({ coins }) => {
-  const [ops, setOps] = useState<Operation[]>([]);
-  const [form, setForm] = useState<FormState>({
-    par: coins[0] ?? 'AAVE',
-    side: 'LONG',
-    modo: 'SWING',
-    entrada: '',
-    alav: '',
-  });
+const MOEDAS = [
+  "AAVE", "ADA", "APT", "ARB", "ATOM", "AVAX", "AXS", "BCH", "BNB",
+  "BTC", "DOGE", "DOT", "ETH", "FET", "FIL", "FLUX", "ICP", "INJ",
+  "LDO", "LINK", "LTC", "NEAR", "OP", "PEPE", "POL", "RATS", "RENDER",
+  "RUNE", "SEI", "SHIB", "SOL", "SUI", "TIA", "TNSR", "TON", "TRX",
+  "UNI", "WIF", "XRP",
+];
 
-  const sortedCoins = [...coins].sort();
+const STORAGE_KEY = "autotrader_exit_ops_v2";
 
-  const updateForm = (field: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+const ExitPanel: React.FC = () => {
+  const [par, setPar] = useState<string>("ADA");
+  const [side, setSide] = useState<Side>("LONG");
+  const [modo, setModo] = useState<Modo>("SWING");
+  const [entrada, setEntrada] = useState<string>("");
+  const [alav, setAlav] = useState<string>("1");
+  const [operacoes, setOperacoes] = useState<OperacaoSaida[]>([]);
 
-  // ---------- SINCRONIZAÇÃO COM BACKEND ----------
-
-  const syncManualOps = async (list: Operation[]) => {
-    if (typeof window === 'undefined') return;
-
-    const payload: ManualOpPayload[] = list.map((op) => ({
-      par: op.par,
-      side: op.side,
-      modo: op.modo,
-      entrada: op.entrada,
-      alav: op.alav,
-    }));
-
-    try {
-      await fetch('/saida/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-    } catch (e) {
-      console.error('Erro ao sincronizar operações manuais com backend', e);
-    }
-  };
-
-  const fetchMonitorData = async () => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const res = await fetch('/saida');
-      if (!res.ok) {
-        return;
-      }
-
-      const data = await res.json();
-
-      // Espera que /saida devolva um array de operações no formato Operation
-      if (Array.isArray(data)) {
-        // Garante que cada operação tenha um id (caso backend não mande)
-        const withIds: Operation[] = data.map((op: any, idx: number) => ({
-          id: typeof op.id === 'number' ? op.id : Date.now() + idx,
-          par: op.par,
-          side: op.side,
-          modo: op.modo,
-          entrada: op.entrada,
-          preco: op.preco,
-          alvo_1: op.alvo_1,
-          ganho_1_pct: op.ganho_1_pct,
-          alvo_2: op.alvo_2,
-          ganho_2_pct: op.ganho_2_pct,
-          alvo_3: op.alvo_3,
-          ganho_3_pct: op.ganho_3_pct,
-          situacao: op.situacao,
-          data: op.data,
-          hora: op.hora,
-          alav: op.alav,
-        }));
-
-        setOps(withIds);
-      }
-    } catch (e) {
-      console.error('Erro ao buscar dados de saída do backend', e);
-    }
-  };
-
-  // ---------- CARREGAR DO LOCALSTORAGE NA PRIMEIRA VEZ ----------
-
+  // Carrega operações salvas no navegador
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw) as Operation[];
-      if (Array.isArray(parsed)) {
-        setOps(parsed);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed: OperacaoSaida[] = JSON.parse(raw);
+        setOperacoes(parsed);
       }
     } catch (e) {
-      console.error('Erro ao carregar operações do localStorage', e);
+      console.error("Erro ao carregar operações de saída do localStorage:", e);
     }
   }, []);
 
-  // ---------- SALVAR NO LOCALSTORAGE SEMPRE QUE MUDAR ----------
-
+  // Salva sempre que houver alteração
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(operacoes));
     } catch (e) {
-      console.error('Erro ao salvar operações', e);
+      console.error("Erro ao salvar operações de saída no localStorage:", e);
     }
-  }, [ops]);
+  }, [operacoes]);
 
-  // ---------- BUSCAR MONITORAMENTO PROFISSIONAL PERIODICAMENTE ----------
+  function handleAdicionar() {
+    const entradaNum = parseFloat(entrada.replace(",", "."));
+    const alavNum = parseInt(alav || "1", 10);
 
-  useEffect(() => {
-    // primeira leitura
-    fetchMonitorData();
-
-    // atualiza a cada 15 segundos
-    const id = window.setInterval(fetchMonitorData, 15000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  // ---------- AÇÕES DO FORMULÁRIO ----------
-
-  const handleAdd = async () => {
-    if (!form.par || !form.entrada.trim() || !form.alav.trim()) {
-      alert('Preencha PAR, ENTRADA e ALAV.');
+    if (!entradaNum || entradaNum <= 0 || !Number.isFinite(entradaNum)) {
+      alert("Informe um preço de entrada válido.");
       return;
     }
-
-    const entradaNum = Number(String(form.entrada).replace(',', '.'));
-    const alavNum = Number(String(form.alav).replace(',', '.'));
-
-    if (!Number.isFinite(entradaNum) || entradaNum <= 0) {
-      alert('Entrada inválida.');
-      return;
-    }
-    if (!Number.isFinite(alavNum) || alavNum <= 0) {
-      alert('Alavancagem inválida.');
+    if (!alavNum || alavNum <= 0) {
+      alert("Informe uma alavancagem válida.");
       return;
     }
 
     const agora = new Date();
-    const data = agora.toISOString().slice(0, 10); // AAAA-MM-DD
-    const hora = agora.toTimeString().slice(0, 5); // HH:MM
+    const dataStr = agora.toISOString().slice(0, 10); // AAAA-MM-DD
+    const horaStr = agora.toTimeString().slice(0, 5); // HH:MM
 
-    const entrada = entradaNum;
-    const preco = entradaNum; // será atualizado pela automação depois
-
-    const novaOp: Operation = {
-      id: Date.now(),
-      par: form.par,
-      side: form.side,
-      modo: form.modo,
-      entrada,
-      preco,
-      alvo_1: entrada,
-      ganho_1_pct: 0,
-      alvo_2: entrada,
-      ganho_2_pct: 0,
-      alvo_3: entrada,
-      ganho_3_pct: 0,
-      situacao: 'ABERTA',
-      data,
-      hora,
+    const novaOp: OperacaoSaida = {
+      id: `${par}-${modo}-${side}-${agora.getTime()}`,
+      par,
+      side,
+      modo,
+      entrada: parseFloat(entradaNum.toFixed(3)),
+      preco: parseFloat(entradaNum.toFixed(3)), // por enquanto igual à entrada; worker depois atualiza
+      alvo_1: parseFloat(entradaNum.toFixed(3)),
+      alvo_2: parseFloat(entradaNum.toFixed(3)),
+      alvo_3: parseFloat(entradaNum.toFixed(3)),
+      ganho_1_pct: 0.0,
+      ganho_2_pct: 0.0,
+      ganho_3_pct: 0.0,
+      pnl_pct: 0.0,
+      situacao: "ABERTA",
       alav: alavNum,
+      data: dataStr,
+      hora: horaStr,
     };
 
-    const novaLista = [...ops, novaOp];
-    setOps(novaLista);
+    setOperacoes((prev) => [...prev, novaOp]);
+    // limpa apenas o campo de entrada (o resto fica)
+    setEntrada("");
+  }
 
-    // envia operações manuais para o backend
-    await syncManualOps(novaLista);
-
-    setForm((prev) => ({
-      ...prev,
-      entrada: '',
-      alav: '',
-    }));
-  };
-
-  const handleDelete = async (id: number) => {
-    const novaLista = ops.filter((op) => op.id !== id);
-    setOps(novaLista);
-
-    // envia lista atualizada para o backend
-    await syncManualOps(novaLista);
-  };
-
-  const formatNumber = (value: number, decimals = 3) => value.toFixed(decimals);
-  const formatPercent = (value: number) => value.toFixed(2);
+  function handleExcluir(id: string) {
+    if (!window.confirm("Deseja realmente excluir esta operação?")) {
+      return;
+    }
+    setOperacoes((prev) => prev.filter((op) => op.id !== id));
+  }
 
   return (
-    <div className="space-y-4">
-      {/* TÍTULO */}
-      <div>
-        <h2 className="text-lg font-semibold text-[#ff7b1b] mb-1">
-          MONITORAMENTO DE SAÍDA
-        </h2>
+    <div className="bg-slate-950 rounded-2xl p-4 text-white">
+      <h1 className="text-2xl font-bold text-orange-400 mb-4">
+        Monitoramento de Saída
+      </h1>
+
+      {/* FORMULÁRIO DE ENTRADA */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* PAR */}
+        <select
+          value={par}
+          onChange={(e) => setPar(e.target.value)}
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm"
+        >
+          {MOEDAS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        {/* SIDE */}
+        <select
+          value={side}
+          onChange={(e) => setSide(e.target.value as Side)}
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm"
+        >
+          <option value="LONG">LONG</option>
+          <option value="SHORT">SHORT</option>
+        </select>
+
+        {/* MODO */}
+        <select
+          value={modo}
+          onChange={(e) => setModo(e.target.value as Modo)}
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm"
+        >
+          <option value="SWING">SWING</option>
+          <option value="POSICIONAL">POSICIONAL</option>
+        </select>
+
+        {/* ENTRADA */}
+        <input
+          type="text"
+          value={entrada}
+          onChange={(e) => setEntrada(e.target.value)}
+          placeholder="Entrada"
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-24"
+        />
+
+        {/* ALAV */}
+        <input
+          type="number"
+          min={1}
+          value={alav}
+          onChange={(e) => setAlav(e.target.value)}
+          placeholder="Alav"
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-20"
+        />
+
+        <button
+          type="button"
+          onClick={handleAdicionar}
+          className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-1 rounded text-sm"
+        >
+          ADICIONAR
+        </button>
       </div>
 
-      {/* BARRA DE ENTRADA DA OPERAÇÃO */}
-      <div className="bg-[#0b2533] rounded-lg px-3 py-2 flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[#e7edf3]">
-          {/* PAR */}
-          <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#ff7b1b] min-w-[70px]"
-            value={form.par}
-            onChange={(e) => updateForm('par', e.target.value)}
-          >
-            {sortedCoins.map((coin) => (
-              <option key={coin} value={coin}>
-                {coin}
-              </option>
-            ))}
-          </select>
-
-          {/* SIDE */}
-          <select
-            className={`bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs min-w-[60px] ${
-              form.side === 'LONG' ? 'text-green-400' : 'text-red-400'
-            }`}
-            value={form.side}
-            onChange={(e) => updateForm('side', e.target.value as Side)}
-          >
-            <option value="LONG">LONG</option>
-            <option value="SHORT">SHORT</option>
-          </select>
-
-          {/* MODO */}
-          <select
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] min-w-[80px]"
-            value={form.modo}
-            onChange={(e) => updateForm('modo', e.target.value as Mode)}
-          >
-            <option value="SWING">SWING</option>
-            <option value="POSICIONAL">POSICIONAL</option>
-          </select>
-
-          {/* ENTRADA */}
-          <input
-            type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-20"
-            placeholder="Entrada"
-            value={form.entrada}
-            onChange={(e) => updateForm('entrada', e.target.value)}
-          />
-
-          {/* ALAVANCAGEM */}
-          <input
-            type="text"
-            className="bg-[#061723] border border-gray-600 rounded-md px-2 py-1 text-xs text-[#e7edf3] w-16"
-            placeholder="Alav"
-            value={form.alav}
-            onChange={(e) => updateForm('alav', e.target.value)}
-          />
-
-          {/* BOTÃO ADICIONAR AO LADO DA ALAV */}
-          <button
-            onClick={handleAdd}
-            className="bg-[#ff7b1b] hover:bg-[#ff9b46] text-xs font-semibold text-[#041019] px-3 py-1 rounded-md"
-          >
-            ADICIONAR
-          </button>
-        </div>
-      </div>
-
-      {/* TABELA */}
-      <div className="overflow-x-auto rounded-lg border border-gray-700">
-        <table className="min-w-full bg-[#0b2533] text-xs text-left text-[#e7edf3]">
-          <thead className="bg-[#1e3a4c] text-[11px] uppercase text-[#ff7b1b]">
-            <tr>
-              <th className="px-2 py-2 w-12">PAR</th>
-              <th className="px-2 py-2 w-12">SIDE</th>
-              <th className="px-2 py-2 w-16">MODO</th>
-              <th className="px-2 py-2 w-20 text-right">ENTRADA</th>
-              <th className="px-2 py-2 w-20 text-right">PREÇO</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 1 US</th>
-              <th className="px-2 py-2 w-16 text-right">GANHO 1%</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 2 US</th>
-              <th className="px-2 py-2 w-16 text-right">GANHO 2%</th>
-              <th className="px-2 py-2 w-20 text-right">ALVO 3 US</th>
-              <th className="px-2 py-2 w-16 text-right">GANHO 3%</th>
-              <th className="px-2 py-2 w-20">SITUAÇÃO</th>
-              <th className="px-2 py-2 w-14 text-right">ALAV</th>
-              <th className="px-2 py-2 w-18">DATA</th>
-              <th className="px-2 py-2 w-14">HORA</th>
-              <th className="px-2 py-2 w-18 text-center">EXCLUIR</th>
+      {/* TABELA DE MONITORAMENTO */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full table-fixed text-sm text-white">
+          <thead>
+            <tr className="bg-slate-900">
+              <th className="px-2 py-1 text-left text-orange-300 w-20">PAR</th>
+              <th className="px-2 py-1 text-left text-orange-300 w-20">SIDE</th>
+              <th className="px-2 py-1 text-left text-orange-300 w-28">MODO</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">ENTRADA</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">PREÇO</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">ALVO 1 US</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">GANHO 1%</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">ALVO 2 US</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">GANHO 2%</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">ALVO 3 US</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">GANHO 3%</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24">PNL %</th>
+              <th className="px-2 py-1 text-left text-orange-300 w-28">SITUAÇÃO</th>
+              <th className="px-2 py-1 text-right text-orange-300 w-20">ALAV</th>
+              <th className="px-2 py-1 text-center text-orange-300 w-24">DATA</th>
+              <th className="px-2 py-1 text-center text-orange-300 w-20">HORA</th>
+              <th className="px-2 py-1 text-center text-orange-300 w-20">EXCLUIR</th>
             </tr>
           </thead>
           <tbody>
-            {ops.length > 0 ? (
-              ops.map((op) => (
+            {operacoes.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={17}
+                  className="px-2 py-4 text-center text-slate-300"
+                >
+                  Nenhuma operação cadastrada.
+                </td>
+              </tr>
+            ) : (
+              operacoes.map((op) => (
                 <tr
                   key={op.id}
-                  className="border-t border-[#173446] hover:bg-[#102b3a]"
+                  className="border-b border-slate-800"
                 >
-                  <td className="px-2 py-1 whitespace-nowrap">{op.par}</td>
+                  <td className="px-2 py-1 w-20">{op.par}</td>
                   <td
-                    className={`px-2 py-1 whitespace-nowrap font-semibold ${
-                      op.side === 'LONG' ? 'text-green-400' : 'text-red-400'
+                    className={`px-2 py-1 w-20 ${
+                      op.side === "LONG"
+                        ? "text-green-400 font-semibold"
+                        : "text-red-400 font-semibold"
                     }`}
                   >
                     {op.side}
                   </td>
-                  <td className="px-2 py-1 whitespace-nowrap">{op.modo}</td>
-
-                  <td className="px-2 py-1 text-right">
-                    {formatNumber(op.entrada)}
+                  <td className="px-2 py-1 w-28">{op.modo}</td>
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.entrada.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 text-right">
-                    {formatNumber(op.preco)}
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.preco.toFixed(3)}
                   </td>
-
-                  <td className="px-2 py-1 text-right">
-                    {formatNumber(op.alvo_1)}
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.alvo_1.toFixed(3)}
                   </td>
-                  <td
-                    className={`px-2 py-1 text-right ${
-                      op.ganho_1_pct > 0
-                        ? 'text-green-400'
-                        : op.ganho_1_pct < 0
-                        ? 'text-red-400'
-                        : ''
-                    }`}
-                  >
-                    {formatPercent(op.ganho_1_pct)}%
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.ganho_1_pct.toFixed(2)}%
                   </td>
-
-                  <td className="px-2 py-1 text-right">
-                    {formatNumber(op.alvo_2)}
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.alvo_2.toFixed(3)}
                   </td>
-                  <td
-                    className={`px-2 py-1 text-right ${
-                      op.ganho_2_pct > 0
-                        ? 'text-green-400'
-                        : op.ganho_2_pct < 0
-                        ? 'text-red-400'
-                        : ''
-                    }`}
-                  >
-                    {formatPercent(op.ganho_2_pct)}%
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.ganho_2_pct.toFixed(2)}%
                   </td>
-
-                  <td className="px-2 py-1 text-right">
-                    {formatNumber(op.alvo_3)}
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.alvo_3.toFixed(3)}
                   </td>
-                  <td
-                    className={`px-2 py-1 text-right ${
-                      op.ganho_3_pct > 0
-                        ? 'text-green-400'
-                        : op.ganho_3_pct < 0
-                        ? 'text-red-400'
-                        : ''
-                    }`}
-                  >
-                    {formatPercent(op.ganho_3_pct)}%
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.ganho_3_pct.toFixed(2)}%
                   </td>
-
-                  <td className="px-2 py-1 whitespace-nowrap">
-                    {op.situacao}
+                  <td className="px-2 py-1 w-24 text-right">
+                    {op.pnl_pct.toFixed(2)}%
                   </td>
-
-                  <td className="px-2 py-1 text-right">{op.alav}</td>
-                  <td className="px-2 py-1 whitespace-nowrap">{op.data}</td>
-                  <td className="px-2 py-1 whitespace-nowrap">{op.hora}</td>
-
-                  <td className="px-2 py-1 text-center">
+                  <td className="px-2 py-1 w-28">{op.situacao}</td>
+                  <td className="px-2 py-1 w-20 text-right">{op.alav}</td>
+                  <td className="px-2 py-1 w-24 text-center">{op.data}</td>
+                  <td className="px-2 py-1 w-20 text-center">{op.hora}</td>
+                  <td className="px-2 py-1 w-20 text-center">
                     <button
-                      onClick={() => handleDelete(op.id)}
-                      className="bg-red-600 hover:bg-red-700 text-[11px] font-semibold text-white px-3 py-1 rounded-md"
+                      type="button"
+                      onClick={() => handleExcluir(op.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded"
                     >
                       Excluir
                     </button>
                   </td>
                 </tr>
               ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={16}
-                  className="px-4 py-4 text-center text-gray-400"
-                >
-                  Nenhuma operação cadastrada.
-                </td>
-              </tr>
             )}
           </tbody>
         </table>
