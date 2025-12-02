@@ -1,212 +1,160 @@
-// INÍCIO DO ARQUIVO
 import React, { useEffect, useState } from "react";
 
-type EntradaSignal = {
+type EntradaRegistro = {
   par: string;
-  sinal: string;
+  modo: "SWING" | "POSICIONAL";
+  sinal: "LONG" | "SHORT" | "NAO_ENTRAR";
   preco: number;
   alvo: number;
   ganho_pct: number;
   assert_pct: number;
-  data: string;
-  hora: string;
+  data: string; // "YYYY-MM-DD"
+  hora: string; // "HH:MM"
 };
 
 type EntradaResponse = {
-  swing: EntradaSignal[];
-  posicional: EntradaSignal[];
+  swing: EntradaRegistro[];
+  posicional: EntradaRegistro[];
 };
 
-const formatNumber = (value: number, decimals: number) =>
-  value.toLocaleString("pt-BR", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+const MIN_ASSERT_PCT = 65.0;
 
-const EntryPanel: React.FC = () => {
-  const [swingSignals, setSwingSignals] = useState<EntradaSignal[]>([]);
-  const [posSignals, setPosSignals] = useState<EntradaSignal[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<string>("--:--:--");
+function sortByPar(list: EntradaRegistro[]): EntradaRegistro[] {
+  return [...list].sort((a, b) => a.par.localeCompare(b.par));
+}
 
-  async function fetchEntrada() {
-    try {
-      setLoading(true);
-      setError(null);
+function classNameSide(sinal: EntradaRegistro["sinal"]): string {
+  if (sinal === "LONG") return "text-green-400 font-semibold";
+  if (sinal === "SHORT") return "text-red-400 font-semibold";
+  return "text-gray-300 font-semibold"; // NAO_ENTRAR
+}
 
-      const response = await fetch("/api/entrada", { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+function classNameGanho(ganho: number): string {
+  if (ganho > 0) return "text-green-400";
+  if (ganho < 0) return "text-red-400";
+  return "text-gray-200";
+}
 
-      const data: EntradaResponse = await response.json();
+function classNameAssert(assert_pct: number): string {
+  if (assert_pct >= MIN_ASSERT_PCT) return "text-green-400";
+  return "text-red-400";
+}
 
-      setSwingSignals(data.swing || []);
-      setPosSignals(data.posicional || []);
+interface TabelaProps {
+  titulo: string;
+  registros: EntradaRegistro[];
+}
 
-      const now = new Date();
-      const hora = now.toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-      setLastUpdate(hora);
-    } catch (err) {
-      console.error("[painel entrada] Erro ao buscar /api/entrada:", err);
-      setError("Erro ao carregar dados de entrada.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
- useEffect(() => {
-  // primeira carga ao abrir a página
-  fetchEntrada();
-
-  // auto-refresh a cada 20 segundos (20.000 ms)
-  const intervalId = window.setInterval(fetchEntrada, 20_000);
-
-  // limpa o timer se o componente for desmontado
-  return () => window.clearInterval(intervalId);
-}, []);
-
-    const renderRow = (s: EntradaSignal, idx: number) => {
-  const ganho = Number(s.ganho_pct ?? 0);
-  const assertVal = Number(s.assert_pct ?? 0);
-
-  const sinalColor =
-    s.sinal === "LONG"
-      ? "text-green-400"
-      : s.sinal === "SHORT"
-      ? "text-red-400"
-      : "text-white";
-
-  const ganhoColor = ganho >= 3 ? "text-green-400" : "text-red-400";
-  const assertColor = assertVal >= 65 ? "text-green-400" : "text-red-400";
+const TabelaModo: React.FC<TabelaProps> = ({ titulo, registros }) => {
+  const ordenados = sortByPar(registros);
 
   return (
-    <tr key={`${s.par}-${idx}`} className="text-sm text-white">
-      <td className="px-3 py-1">{s.par}</td>
-      <td className={`px-3 py-1 font-semibold ${sinalColor}`}>{s.sinal}</td>
-      <td className="px-3 py-1">
-        {formatNumber(s.preco ?? 0, 3)}
-      </td>
-      <td className="px-3 py-1">
-        {formatNumber(s.alvo ?? 0, 3)}
-      </td>
-      <td className={`px-3 py-1 ${ganhoColor}`}>
-        {formatNumber(ganho, 2)}%
-      </td>
-      <td className={`px-3 py-1 ${assertColor}`}>
-        {formatNumber(assertVal, 2)}%
-      </td>
-      <td className="px-3 py-1">{s.data}</td>
-      <td className="px-3 py-1">{s.hora}</td>
-    </tr>
+    <div className="flex-1 bg-slate-900 rounded-xl p-4 shadow-md m-2">
+      <h2 className="text-xl font-bold text-orange-400 mb-3 text-center">
+        {titulo}
+      </h2>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm text-white">
+          <thead>
+            <tr className="bg-slate-800">
+              <th className="px-2 py-1 text-left text-orange-300">PAR</th>
+              <th className="px-2 py-1 text-left text-orange-300">SIDE</th>
+              <th className="px-2 py-1 text-right text-orange-300">PREÇO</th>
+              <th className="px-2 py-1 text-right text-orange-300">ALVO</th>
+              <th className="px-2 py-1 text-right text-orange-300">GANHO %</th>
+              <th className="px-2 py-1 text-right text-orange-300">ASSERT %</th>
+              <th className="px-2 py-1 text-center text-orange-300">DATA</th>
+              <th className="px-2 py-1 text-center text-orange-300">HORA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordenados.map((row) => (
+              <tr key={`${titulo}-${row.par}`} className="border-b border-slate-700">
+                <td className="px-2 py-1">{row.par}</td>
+                <td className={`px-2 py-1 ${classNameSide(row.sinal)}`}>
+                  {row.sinal}
+                </td>
+                <td className="px-2 py-1 text-right">
+                  {row.preco.toFixed(3)}
+                </td>
+                <td className="px-2 py-1 text-right">
+                  {row.alvo.toFixed(3)}
+                </td>
+                <td className={`px-2 py-1 text-right ${classNameGanho(row.ganho_pct)}`}>
+                  {row.ganho_pct.toFixed(2)}
+                </td>
+                <td className={`px-2 py-1 text-right ${classNameAssert(row.assert_pct)}`}>
+                  {row.assert_pct.toFixed(2)}
+                </td>
+                <td className="px-2 py-1 text-center">{row.data}</td>
+                <td className="px-2 py-1 text-center">{row.hora}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 };
-    
+
+const EntryPanel: React.FC = () => {
+  const [data, setData] = useState<EntradaResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function carregar() {
+      try {
+        setLoading(true);
+        setErro(null);
+        const resp = await fetch("/api/entrada");
+        if (!resp.ok) {
+          throw new Error("Erro ao buscar /api/entrada");
+        }
+        const json = (await resp.json()) as EntradaResponse;
+        setData(json);
+      } catch (e: any) {
+        console.error(e);
+        setErro("Falha ao carregar dados de entrada.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    carregar();
+    const id = setInterval(carregar, 60_000); // atualiza a cada 60s
+    return () => clearInterval(id);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-slate-900 rounded-xl p-4 text-white">
+        Carregando dados de entrada...
+      </div>
+    );
+  }
+
+  if (erro || !data) {
+    return (
+      <div className="bg-slate-900 rounded-xl p-4 text-red-400">
+        {erro ?? "Sem dados para exibir."}
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 text-white">
-      <h2 className="text-xl font-bold mb-2">PAINEL ENTRADA</h2>
+    <div className="bg-slate-950 rounded-2xl p-4 text-white">
+      <h1 className="text-2xl font-bold text-orange-400 mb-4 text-center">
+        Painel de Entrada
+      </h1>
 
-      <p className="text-sm mb-4">
-        Dados atualizados às:{" "}
-        <span className="font-mono">{lastUpdate}</span>
-      </p>
-
-      {error && (
-        <div className="mb-4 text-sm text-red-400">
-          {error}
-        </div>
-      )}
-
-      {loading && (
-        <div className="mb-4 text-sm text-gray-300">
-          Atualizando dados...
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* ENTRADA 4H – SWING */}
-        <div className="bg-[#04162a] rounded-xl border border-[#1f3b5c] overflow-hidden">
-          <div className="px-4 py-2 border-b border-[#1f3b5c]">
-            <span className="text-sm font-semibold text-orange-300">
-              ENTRADA 4H – SWING
-            </span>
-          </div>
-          <table className="w-full text-left">
-            <thead className="bg-[#06213c] text-xs text-orange-300">
-              <tr>
-                <th className="px-3 py-2">PAR</th>
-                <th className="px-3 py-2">SINAL</th>
-                <th className="px-3 py-2">PREÇO</th>
-                <th className="px-3 py-2">ALVO</th>
-                <th className="px-3 py-2">GANHO %</th>
-                <th className="px-3 py-2">ASSERT %</th>
-                <th className="px-3 py-2">DATA</th>
-                <th className="px-3 py-2">HORA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {swingSignals.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-3 py-3 text-center text-sm text-gray-400"
-                  >
-                    Nenhum sinal disponível.
-                  </td>
-                </tr>
-              ) : (
-                swingSignals.map(renderRow)
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ENTRADA 1D – POSICIONAL */}
-        <div className="bg-[#04162a] rounded-xl border border-[#1f3b5c] overflow-hidden">
-          <div className="px-4 py-2 border-b border-[#1f3b5c]">
-            <span className="text-sm font-semibold text-orange-300">
-              ENTRADA 1D – POSICIONAL
-            </span>
-          </div>
-          <table className="w-full text-left">
-            <thead className="bg-[#06213c] text-xs text-orange-300">
-              <tr>
-                <th className="px-3 py-2">PAR</th>
-                <th className="px-3 py-2">SINAL</th>
-                <th className="px-3 py-2">PREÇO</th>
-                <th className="px-3 py-2">ALVO</th>
-                <th className="px-3 py-2">GANHO %</th>
-                <th className="px-3 py-2">ASSERT %</th>
-                <th className="px-3 py-2">DATA</th>
-                <th className="px-3 py-2">HORA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {posSignals.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-3 py-3 text-center text-sm text-gray-400"
-                  >
-                    Nenhum sinal disponível.
-                  </td>
-                </tr>
-              ) : (
-                posSignals.map(renderRow)
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="flex flex-col lg:flex-row">
+        <TabelaModo titulo="SWING (4H)" registros={data.swing || []} />
+        <TabelaModo titulo="POSICIONAL (1D)" registros={data.posicional || []} />
       </div>
     </div>
   );
 };
 
 export default EntryPanel;
-// FIM DO ARQUIVO
