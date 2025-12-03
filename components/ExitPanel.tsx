@@ -41,7 +41,7 @@ const ExitPanel: React.FC = () => {
   const [alav, setAlav] = useState<string>("1");
   const [operacoes, setOperacoes] = useState<OperacaoSaida[]>([]);
 
-  // Carrega operações salvas no navegador
+  // Carrega operações salvas
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -50,16 +50,16 @@ const ExitPanel: React.FC = () => {
         setOperacoes(parsed);
       }
     } catch (e) {
-      console.error("Erro ao carregar operações de saída do localStorage:", e);
+      console.error("Erro ao carregar operações de saída:", e);
     }
   }, []);
 
-  // Salva sempre que houver alteração
+  // Salva operações sempre que mudar
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(operacoes));
     } catch (e) {
-      console.error("Erro ao salvar operações de saída no localStorage:", e);
+      console.error("Erro ao salvar operações de saída:", e);
     }
   }, [operacoes]);
 
@@ -80,16 +80,19 @@ const ExitPanel: React.FC = () => {
     const dataStr = agora.toISOString().slice(0, 10); // AAAA-MM-DD
     const horaStr = agora.toTimeString().slice(0, 5); // HH:MM
 
+    const entradaFix = parseFloat(entradaNum.toFixed(3));
+
     const novaOp: OperacaoSaida = {
       id: `${par}-${modo}-${side}-${agora.getTime()}`,
       par,
       side,
       modo,
-      entrada: parseFloat(entradaNum.toFixed(3)),
-      preco: parseFloat(entradaNum.toFixed(3)), // por enquanto igual à entrada; worker depois atualiza
-      alvo_1: parseFloat(entradaNum.toFixed(3)),
-      alvo_2: parseFloat(entradaNum.toFixed(3)),
-      alvo_3: parseFloat(entradaNum.toFixed(3)),
+      entrada: entradaFix,
+      // por enquanto iguais à entrada; worker depois atualiza
+      preco: entradaFix,
+      alvo_1: entradaFix,
+      alvo_2: entradaFix,
+      alvo_3: entradaFix,
       ganho_1_pct: 0.0,
       ganho_2_pct: 0.0,
       ganho_3_pct: 0.0,
@@ -101,7 +104,6 @@ const ExitPanel: React.FC = () => {
     };
 
     setOperacoes((prev) => [...prev, novaOp]);
-    // limpa apenas o campo de entrada (o resto fica)
     setEntrada("");
   }
 
@@ -112,13 +114,18 @@ const ExitPanel: React.FC = () => {
     setOperacoes((prev) => prev.filter((op) => op.id !== id));
   }
 
+  // Ordena por PAR em ordem alfabética para exibir
+  const operacoesOrdenadas = [...operacoes].sort((a, b) =>
+    a.par.localeCompare(b.par)
+  );
+
   return (
     <div className="bg-slate-950 rounded-2xl p-4 text-white">
       <h1 className="text-2xl font-bold text-orange-400 mb-4">
         Monitoramento de Saída
       </h1>
 
-      {/* FORMULÁRIO DE ENTRADA */}
+      {/* FORMULÁRIO */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {/* PAR */}
         <select
@@ -162,10 +169,9 @@ const ExitPanel: React.FC = () => {
           className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-24"
         />
 
-        {/* ALAV */}
+        {/* ALAV (somente digitar, sem setas) */}
         <input
-          type="number"
-          min={1}
+          type="text"
           value={alav}
           onChange={(e) => setAlav(e.target.value)}
           placeholder="Alav"
@@ -181,32 +187,66 @@ const ExitPanel: React.FC = () => {
         </button>
       </div>
 
-      {/* TABELA DE MONITORAMENTO */}
+      {/* TABELA */}
       <div className="overflow-x-auto">
-        <table className="min-w-full table-fixed text-sm text-white">
+        <table className="min-w-full table-fixed text-xs text-white border-collapse">
           <thead>
             <tr className="bg-slate-900">
-              <th className="px-2 py-1 text-left text-orange-300 w-20">PAR</th>
-              <th className="px-2 py-1 text-left text-orange-300 w-20">SIDE</th>
-              <th className="px-2 py-1 text-left text-orange-300 w-28">MODO</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">ENTRADA</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">PREÇO</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">ALVO 1 US</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">GANHO 1%</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">ALVO 2 US</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">GANHO 2%</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">ALVO 3 US</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">GANHO 3%</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-24">PNL %</th>
-              <th className="px-2 py-1 text-left text-orange-300 w-28">SITUAÇÃO</th>
-              <th className="px-2 py-1 text-right text-orange-300 w-20">ALAV</th>
-              <th className="px-2 py-1 text-center text-orange-300 w-24">DATA</th>
-              <th className="px-2 py-1 text-center text-orange-300 w-20">HORA</th>
-              <th className="px-2 py-1 text-center text-orange-300 w-20">EXCLUIR</th>
+              <th className="px-2 py-1 text-left text-orange-300 w-20 border-r border-white/10">
+                PAR
+              </th>
+              <th className="px-2 py-1 text-left text-orange-300 w-20 border-r border-white/10">
+                SIDE
+              </th>
+              <th className="px-2 py-1 text-left text-orange-300 w-24 border-r border-white/10">
+                MODO
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24 border-r border-white/10">
+                ENTRADA
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24 border-r border-white/10">
+                PREÇO
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24 border-r border-white/10">
+                ALVO 1 US
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+                GANHO 1%
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24 border-r border-white/10">
+                ALVO 2 US
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+                GANHO 2%
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-24 border-r border-white/10">
+                ALVO 3 US
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+                GANHO 3%
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+                PNL %
+              </th>
+              <th className="px-2 py-1 text-left text-orange-300 w-28 border-r border-white/10">
+                SITUAÇÃO
+              </th>
+              <th className="px-2 py-1 text-right text-orange-300 w-16 border-r border-white/10">
+                ALAV
+              </th>
+              <th className="px-2 py-1 text-center text-orange-300 w-24 border-r border-white/10">
+                DATA
+              </th>
+              <th className="px-2 py-1 text-center text-orange-300 w-20 border-r border-white/10">
+                HORA
+              </th>
+              <th className="px-2 py-1 text-center text-orange-300 w-20">
+                EXCLUIR
+              </th>
             </tr>
           </thead>
           <tbody>
-            {operacoes.length === 0 ? (
+            {operacoesOrdenadas.length === 0 ? (
               <tr>
                 <td
                   colSpan={17}
@@ -216,14 +256,16 @@ const ExitPanel: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              operacoes.map((op) => (
+              operacoesOrdenadas.map((op) => (
                 <tr
                   key={op.id}
                   className="border-b border-slate-800"
                 >
-                  <td className="px-2 py-1 w-20">{op.par}</td>
+                  <td className="px-2 py-1 w-20 border-r border-white/10">
+                    {op.par}
+                  </td>
                   <td
-                    className={`px-2 py-1 w-20 ${
+                    className={`px-2 py-1 w-20 border-r border-white/10 ${
                       op.side === "LONG"
                         ? "text-green-400 font-semibold"
                         : "text-red-400 font-semibold"
@@ -231,38 +273,48 @@ const ExitPanel: React.FC = () => {
                   >
                     {op.side}
                   </td>
-                  <td className="px-2 py-1 w-28">{op.modo}</td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-24 border-r border-white/10">
+                    {op.modo}
+                  </td>
+                  <td className="px-2 py-1 w-24 text-right border-r border-white/10">
                     {op.entrada.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-24 text-right border-r border-white/10">
                     {op.preco.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-24 text-right border-r border-white/10">
                     {op.alvo_1.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
                     {op.ganho_1_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-24 text-right border-r border-white/10">
                     {op.alvo_2.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
                     {op.ganho_2_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-24 text-right border-r border-white/10">
                     {op.alvo_3.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
                     {op.ganho_3_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-24 text-right">
+                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
                     {op.pnl_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-28">{op.situacao}</td>
-                  <td className="px-2 py-1 w-20 text-right">{op.alav}</td>
-                  <td className="px-2 py-1 w-24 text-center">{op.data}</td>
-                  <td className="px-2 py-1 w-20 text-center">{op.hora}</td>
+                  <td className="px-2 py-1 w-28 border-r border-white/10">
+                    {op.situacao}
+                  </td>
+                  <td className="px-2 py-1 w-16 text-right border-r border-white/10">
+                    {op.alav}
+                  </td>
+                  <td className="px-2 py-1 w-24 text-center border-r border-white/10">
+                    {op.data}
+                  </td>
+                  <td className="px-2 py-1 w-20 text-center border-r border-white/10">
+                    {op.hora}
+                  </td>
                   <td className="px-2 py-1 w-20 text-center">
                     <button
                       type="button"
