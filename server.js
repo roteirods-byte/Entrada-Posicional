@@ -61,6 +61,19 @@ app.get("/api/entrada", (req, res) => {
   return res.json({ swing, posicional });
 });
 
+app.get("/api/saida", (req, res) => {
+  try {
+    const PATH = "/home/roteiro_ds/autotrader-planilhas-python/data/saida_monitoramento.json";
+    if (!fs.existsSync(PATH)) {
+      return res.json([]);
+    }
+    const raw = fs.readFileSync(PATH);
+    const dados = JSON.parse(raw);
+    return res.json(dados);
+  } catch (e) {
+    return res.json([]);
+  }
+});
 // --------- /saida (monitoramento automático - SAÍDA 2) ---------
 app.get("/saida", (req, res) => {
   const dados = lerJsonSeguro(SAIDA_MONITORAMENTO_PATH, []);
