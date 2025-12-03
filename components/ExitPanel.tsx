@@ -16,11 +16,11 @@ type OperacaoSaida = {
   ganho_1_pct: number;
   ganho_2_pct: number;
   ganho_3_pct: number;
-  pnl_pct: number;
+  pnl_pct: number; // ainda existe no modelo para uso futuro pelo worker, mas NÃO aparece na tela
   situacao: string;
   alav: number;
-  data: string; // AAAA-MM-DD
-  hora: string; // HH:MM
+  data: string; // AAAA-MM-DD (horário local)
+  hora: string; // HH:MM (horário local)
 };
 
 const MOEDAS = [
@@ -32,6 +32,19 @@ const MOEDAS = [
 ];
 
 const STORAGE_KEY = "autotrader_exit_ops_v2";
+
+function formatarDataLocalISO(d: Date): string {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function formatarHoraLocal(d: Date): string {
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
 
 const ExitPanel: React.FC = () => {
   const [par, setPar] = useState<string>("ADA");
@@ -75,8 +88,9 @@ const ExitPanel: React.FC = () => {
     }
 
     const agora = new Date();
-    const dataStr = agora.toISOString().slice(0, 10);
-    const horaStr = agora.toTimeString().slice(0, 5);
+    // >>> DATA/HORA NO HORÁRIO LOCAL (Brasil) <<<
+    const dataStr = formatarDataLocalISO(agora);
+    const horaStr = formatarHoraLocal(agora);
 
     const entradaFix = parseFloat(entradaNum.toFixed(3));
 
@@ -214,9 +228,7 @@ const ExitPanel: React.FC = () => {
               <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
                 GANHO 3%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[60px] border-r border-white/10">
-                PNL %
-              </th>
+              {/* PNL % REMOVIDO */}
               <th className="px-2 py-1 text-left text-orange-300 w-[110px] border-r border-white/10">
                 SITUAÇÃO
               </th>
@@ -238,7 +250,7 @@ const ExitPanel: React.FC = () => {
             {operacoesOrdenadas.length === 0 ? (
               <tr>
                 <td
-                  colSpan={17}
+                  colSpan={16}
                   className="px-2 py-4 text-center text-slate-300"
                 >
                   Nenhuma operação cadastrada.
@@ -288,9 +300,6 @@ const ExitPanel: React.FC = () => {
                   </td>
                   <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
                     {op.ganho_3_pct.toFixed(2)}%
-                  </td>
-                  <td className="px-2 py-1 w-[60px] text-right border-r border-white/10">
-                    {op.pnl_pct.toFixed(2)}%
                   </td>
                   <td className="px-2 py-1 w-[110px] border-r border-white/10">
                     {op.situacao}
