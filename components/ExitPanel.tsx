@@ -16,11 +16,11 @@ type OperacaoSaida = {
   ganho_1_pct: number;
   ganho_2_pct: number;
   ganho_3_pct: number;
-  pnl_pct: number; // ainda existe no modelo para uso futuro pelo worker, mas NÃO aparece na tela
+  pnl_pct: number; // usado pelo worker, não exibido
   situacao: string;
   alav: number;
-  data: string; // AAAA-MM-DD (horário local)
-  hora: string; // HH:MM (horário local)
+  data: string; // AAAA-MM-DD
+  hora: string; // HH:MM
 };
 
 const MOEDAS = [
@@ -32,6 +32,9 @@ const MOEDAS = [
 ];
 
 const STORAGE_KEY = "autotrader_exit_ops_v2";
+
+// URL da API de saída (monitoramento automático)
+const API_SAIDA_URL = "http://34.92.232.253:8080/api/saida";
 
 function formatarDataLocalISO(d: Date): string {
   const ano = d.getFullYear();
@@ -54,6 +57,7 @@ const ExitPanel: React.FC = () => {
   const [alav, setAlav] = useState<string>("1");
   const [operacoes, setOperacoes] = useState<OperacaoSaida[]>([]);
 
+  // 1) Carrega do localStorage (garante que o painel continue funcionando hoje)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -62,10 +66,40 @@ const ExitPanel: React.FC = () => {
         setOperacoes(parsed);
       }
     } catch (e) {
-      console.error("Erro ao carregar operações de saída:", e);
+      console.error("Erro ao carregar operações de saída (localStorage):", e);
     }
   }, []);
 
+  // 2) Lê da API /api/saida e atualiza a cada 5 minutos (igual Entrada)
+  useEffect(() => {
+    let cancelado = false;
+
+    async function carregarDaAPI() {
+      try {
+        const resp = await fetch(API_SAIDA_URL);
+        if (!resp.ok) return;
+
+        const dados: OperacaoSaida[] = await resp.json();
+        if (!cancelado && Array.isArray(dados) && dados.length > 0) {
+          setOperacoes(dados);
+        }
+      } catch (e) {
+        console.error("Erro ao buscar operações de saída na API:", e);
+      }
+    }
+
+    // primeira leitura
+    carregarDaAPI();
+    // repete a cada 5 minutos
+    const id = setInterval(carregarDaAPI, 300000);
+
+    return () => {
+      cancelado = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  // 3) Salva sempre que mudar (mantém histórico até o worker assumir 100%)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(operacoes));
@@ -88,10 +122,8 @@ const ExitPanel: React.FC = () => {
     }
 
     const agora = new Date();
-    // >>> DATA/HORA NO HORÁRIO LOCAL (Brasil) <<<
     const dataStr = formatarDataLocalISO(agora);
     const horaStr = formatarHoraLocal(agora);
-
     const entradaFix = parseFloat(entradaNum.toFixed(3));
 
     const novaOp: OperacaoSaida = {
@@ -100,7 +132,7 @@ const ExitPanel: React.FC = () => {
       side,
       modo,
       entrada: entradaFix,
-      preco: entradaFix,
+      preco: entradaFix,      // por enquanto igual, o worker depois vai atualizar
       alvo_1: entradaFix,
       alvo_2: entradaFix,
       alvo_3: entradaFix,
@@ -195,50 +227,50 @@ const ExitPanel: React.FC = () => {
         <table className="min-w-full table-fixed text-xs text-white border-collapse">
           <thead>
             <tr className="bg-slate-900">
-              <th className="px-2 py-1 text-left text-orange-300 w-[60px] border-r border-white/10">
+              <th className="px-2 py-1 text-left  text-orange-300 w-[60px]  border-r border-white/10">
                 PAR
               </th>
-              <th className="px-2 py-1 text-left text-orange-300 w-[60px] border-r border-white/10">
+              <th className="px-2 py-1 text-left  text-orange-300 w-[60px]  border-r border-white/10">
                 SIDE
               </th>
-              <th className="px-2 py-1 text-left text-orange-300 w-[90px] border-r border-white/10">
+              <th className="px-2 py-1 text-left  text-orange-300 w-[90px]  border-r border-white/10">
                 MODO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 ENTRADA
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 PREÇO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 ALVO 1 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 GANHO 1%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 ALVO 2 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 GANHO 2%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px]  border-r border-white/10">
                 ALVO 3 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[70px]  border-r border-white/10">
                 GANHO 3%
               </th>
-              {/* PNL % REMOVIDO */}
-              <th className="px-2 py-1 text-left text-orange-300 w-[110px] border-r border-white/10">
+              {/* PNL % removido da tela */}
+              <th className="px-2 py-1 text-left  text-orange-300 w-[110px] border-r border-white/10">
                 SITUAÇÃO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[60px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[60px]  border-r border-white/10">
                 ALAV
               </th>
               <th className="px-2 py-1 text-center text-orange-300 w-[100px] border-r border-white/10">
                 DATA
               </th>
-              <th className="px-2 py-1 text-center text-orange-300 w-[70px] border-r border-white/10">
+              <th className="px-2 py-1 text-center text-orange-300 w-[70px]  border-r border-white/10">
                 HORA
               </th>
               <th className="px-2 py-1 text-center text-orange-300 w-[70px]">
@@ -262,7 +294,7 @@ const ExitPanel: React.FC = () => {
                   key={op.id}
                   className="border-b border-slate-800"
                 >
-                  <td className="px-2 py-1 w-[60px] border-r border-white/10">
+                  <td className="px-2 py-1 w-[60px]  border-r border-white/10">
                     {op.par}
                   </td>
                   <td
@@ -274,7 +306,7 @@ const ExitPanel: React.FC = () => {
                   >
                     {op.side}
                   </td>
-                  <td className="px-2 py-1 w-[90px] border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px]  border-r border-white/10">
                     {op.modo}
                   </td>
                   <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
@@ -304,16 +336,16 @@ const ExitPanel: React.FC = () => {
                   <td className="px-2 py-1 w-[110px] border-r border-white/10">
                     {op.situacao}
                   </td>
-                  <td className="px-2 py-1 w-[60px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[60px]  text-right border-r border-white/10">
                     {op.alav}
                   </td>
                   <td className="px-2 py-1 w-[100px] text-center border-r border-white/10">
                     {op.data}
                   </td>
-                  <td className="px-2 py-1 w-[70px] text-center border-r border-white/10">
+                  <td className="px-2 py-1 w-[70px]  text-center border-r border-white/10">
                     {op.hora}
                   </td>
-                  <td className="px-2 py-1 w-[70px] text-center">
+                  <td className="px-2 py-1 w-[70px]  text-center">
                     <button
                       type="button"
                       onClick={() => handleExcluir(op.id)}
