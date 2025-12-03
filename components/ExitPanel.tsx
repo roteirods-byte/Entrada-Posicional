@@ -41,7 +41,6 @@ const ExitPanel: React.FC = () => {
   const [alav, setAlav] = useState<string>("1");
   const [operacoes, setOperacoes] = useState<OperacaoSaida[]>([]);
 
-  // Carrega operações salvas
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -54,7 +53,6 @@ const ExitPanel: React.FC = () => {
     }
   }, []);
 
-  // Salva operações sempre que mudar
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(operacoes));
@@ -77,8 +75,8 @@ const ExitPanel: React.FC = () => {
     }
 
     const agora = new Date();
-    const dataStr = agora.toISOString().slice(0, 10); // AAAA-MM-DD
-    const horaStr = agora.toTimeString().slice(0, 5); // HH:MM
+    const dataStr = agora.toISOString().slice(0, 10);
+    const horaStr = agora.toTimeString().slice(0, 5);
 
     const entradaFix = parseFloat(entradaNum.toFixed(3));
 
@@ -88,7 +86,6 @@ const ExitPanel: React.FC = () => {
       side,
       modo,
       entrada: entradaFix,
-      // por enquanto iguais à entrada; worker depois atualiza
       preco: entradaFix,
       alvo_1: entradaFix,
       alvo_2: entradaFix,
@@ -108,13 +105,10 @@ const ExitPanel: React.FC = () => {
   }
 
   function handleExcluir(id: string) {
-    if (!window.confirm("Deseja realmente excluir esta operação?")) {
-      return;
-    }
+    if (!window.confirm("Deseja realmente excluir esta operação?")) return;
     setOperacoes((prev) => prev.filter((op) => op.id !== id));
   }
 
-  // Ordena por PAR em ordem alfabética
   const operacoesOrdenadas = [...operacoes].sort((a, b) =>
     a.par.localeCompare(b.par)
   );
@@ -127,7 +121,6 @@ const ExitPanel: React.FC = () => {
 
       {/* FORMULÁRIO */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {/* PAR */}
         <select
           value={par}
           onChange={(e) => setPar(e.target.value)}
@@ -140,7 +133,6 @@ const ExitPanel: React.FC = () => {
           ))}
         </select>
 
-        {/* SIDE */}
         <select
           value={side}
           onChange={(e) => setSide(e.target.value as Side)}
@@ -150,7 +142,6 @@ const ExitPanel: React.FC = () => {
           <option value="SHORT">SHORT</option>
         </select>
 
-        {/* MODO */}
         <select
           value={modo}
           onChange={(e) => setModo(e.target.value as Modo)}
@@ -160,16 +151,14 @@ const ExitPanel: React.FC = () => {
           <option value="POSICIONAL">POSICIONAL</option>
         </select>
 
-        {/* ENTRADA */}
         <input
           type="text"
           value={entrada}
           onChange={(e) => setEntrada(e.target.value)}
           placeholder="Entrada"
-          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-[90px]"
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-[80px]"
         />
 
-        {/* ALAV (somente digitar) */}
         <input
           type="text"
           value={alav}
@@ -201,31 +190,31 @@ const ExitPanel: React.FC = () => {
               <th className="px-2 py-1 text-left text-orange-300 w-[90px] border-r border-white/10">
                 MODO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 ENTRADA
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 PREÇO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 ALVO 1 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 GANHO 1%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 ALVO 2 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 GANHO 2%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[80px] border-r border-white/10">
                 ALVO 3 US
               </th>
               <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
                 GANHO 3%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[60px] border-r border-white/10">
                 PNL %
               </th>
               <th className="px-2 py-1 text-left text-orange-300 w-[110px] border-r border-white/10">
@@ -237,7 +226,7 @@ const ExitPanel: React.FC = () => {
               <th className="px-2 py-1 text-center text-orange-300 w-[100px] border-r border-white/10">
                 DATA
               </th>
-              <th className="px-2 py-1 text-center text-orange-300 w-[80px] border-r border-white/10">
+              <th className="px-2 py-1 text-center text-orange-300 w-[70px] border-r border-white/10">
                 HORA
               </th>
               <th className="px-2 py-1 text-center text-orange-300 w-[70px]">
@@ -276,31 +265,31 @@ const ExitPanel: React.FC = () => {
                   <td className="px-2 py-1 w-[90px] border-r border-white/10">
                     {op.modo}
                   </td>
-                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.entrada.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.preco.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.alvo_1.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.ganho_1_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.alvo_2.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.ganho_2_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-right border-r border-white/10">
                     {op.alvo_3.toFixed(3)}
                   </td>
                   <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
                     {op.ganho_3_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[60px] text-right border-r border-white/10">
                     {op.pnl_pct.toFixed(2)}%
                   </td>
                   <td className="px-2 py-1 w-[110px] border-r border-white/10">
@@ -312,7 +301,7 @@ const ExitPanel: React.FC = () => {
                   <td className="px-2 py-1 w-[100px] text-center border-r border-white/10">
                     {op.data}
                   </td>
-                  <td className="px-2 py-1 w-[80px] text-center border-r border-white/10">
+                  <td className="px-2 py-1 w-[70px] text-center border-r border-white/10">
                     {op.hora}
                   </td>
                   <td className="px-2 py-1 w-[70px] text-center">
