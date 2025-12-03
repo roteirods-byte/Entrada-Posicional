@@ -166,7 +166,7 @@ const ExitPanel: React.FC = () => {
           value={entrada}
           onChange={(e) => setEntrada(e.target.value)}
           placeholder="Entrada"
-          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-20"
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-[90px]"
         />
 
         {/* ALAV (somente digitar) */}
@@ -175,7 +175,7 @@ const ExitPanel: React.FC = () => {
           value={alav}
           onChange={(e) => setAlav(e.target.value)}
           placeholder="Alav"
-          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-16"
+          className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm w-[60px]"
         />
 
         <button
@@ -192,55 +192,55 @@ const ExitPanel: React.FC = () => {
         <table className="min-w-full table-fixed text-xs text-white border-collapse">
           <thead>
             <tr className="bg-slate-900">
-              <th className="px-2 py-1 text-left text-orange-300 w-20 border-r border-white/10">
+              <th className="px-2 py-1 text-left text-orange-300 w-[60px] border-r border-white/10">
                 PAR
               </th>
-              <th className="px-2 py-1 text-left text-orange-300 w-14 border-r border-white/10">
+              <th className="px-2 py-1 text-left text-orange-300 w-[60px] border-r border-white/10">
                 SIDE
               </th>
-              <th className="px-2 py-1 text-left text-orange-300 w-22 border-r border-white/10">
+              <th className="px-2 py-1 text-left text-orange-300 w-[90px] border-r border-white/10">
                 MODO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
                 ENTRADA
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
                 PREÇO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
                 ALVO 1 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-18 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
                 GANHO 1%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-22 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
                 ALVO 2 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-18 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
                 GANHO 2%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-20 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[90px] border-r border-white/10">
                 ALVO 3 US
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-18 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
                 GANHO 3%
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-16 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[70px] border-r border-white/10">
                 PNL %
               </th>
-              <th className="px-2 py-1 text-left text-orange-300 w-24 border-r border-white/10">
+              <th className="px-2 py-1 text-left text-orange-300 w-[110px] border-r border-white/10">
                 SITUAÇÃO
               </th>
-              <th className="px-2 py-1 text-right text-orange-300 w-14 border-r border-white/10">
+              <th className="px-2 py-1 text-right text-orange-300 w-[60px] border-r border-white/10">
                 ALAV
               </th>
-              <th className="px-2 py-1 text-center text-orange-300 w-22 border-r border-white/10">
+              <th className="px-2 py-1 text-center text-orange-300 w-[100px] border-r border-white/10">
                 DATA
               </th>
-              <th className="px-2 py-1 text-center text-orange-300 w-18 border-r border-white/10">
+              <th className="px-2 py-1 text-center text-orange-300 w-[80px] border-r border-white/10">
                 HORA
               </th>
-              <th className="px-2 py-1 text-center text-orange-300 w-18">
+              <th className="px-2 py-1 text-center text-orange-300 w-[70px]">
                 EXCLUIR
               </th>
             </tr>
@@ -261,11 +261,11 @@ const ExitPanel: React.FC = () => {
                   key={op.id}
                   className="border-b border-slate-800"
                 >
-                  <td className="px-2 py-1 w-20 border-r border-white/10">
+                  <td className="px-2 py-1 w-[60px] border-r border-white/10">
                     {op.par}
                   </td>
                   <td
-                    className={`px-2 py-1 w-14 border-r border-white/10 ${
+                    className={`px-2 py-1 w-[60px] border-r border-white/10 ${
                       op.side === "LONG"
                         ? "text-green-400 font-semibold"
                         : "text-red-400 font-semibold"
@@ -273,49 +273,49 @@ const ExitPanel: React.FC = () => {
                   >
                     {op.side}
                   </td>
-                  <td className="px-2 py-1 w-22 border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px] border-r border-white/10">
                     {op.modo}
                   </td>
-                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
                     {op.entrada.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
                     {op.preco.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
                     {op.alvo_1.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-18 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
                     {op.ganho_1_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-22 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
                     {op.alvo_2.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-18 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
                     {op.ganho_2_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-20 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[90px] text-right border-r border-white/10">
                     {op.alvo_3.toFixed(3)}
                   </td>
-                  <td className="px-2 py-1 w-18 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
                     {op.ganho_3_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-16 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[70px] text-right border-r border-white/10">
                     {op.pnl_pct.toFixed(2)}%
                   </td>
-                  <td className="px-2 py-1 w-24 border-r border-white/10">
+                  <td className="px-2 py-1 w-[110px] border-r border-white/10">
                     {op.situacao}
                   </td>
-                  <td className="px-2 py-1 w-14 text-right border-r border-white/10">
+                  <td className="px-2 py-1 w-[60px] text-right border-r border-white/10">
                     {op.alav}
                   </td>
-                  <td className="px-2 py-1 w-22 text-center border-r border-white/10">
+                  <td className="px-2 py-1 w-[100px] text-center border-r border-white/10">
                     {op.data}
                   </td>
-                  <td className="px-2 py-1 w-18 text-center border-r border-white/10">
+                  <td className="px-2 py-1 w-[80px] text-center border-r border-white/10">
                     {op.hora}
                   </td>
-                  <td className="px-2 py-1 w-18 text-center">
+                  <td className="px-2 py-1 w-[70px] text-center">
                     <button
                       type="button"
                       onClick={() => handleExcluir(op.id)}
