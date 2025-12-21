@@ -4,3 +4,4 @@ dist/
 *.err
 *.BAK_*
 *.bak_*
+data/entrada.json
