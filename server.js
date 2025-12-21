@@ -3,123 +3,71 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
-const PORT = 8080;
+
+// Porta do site (se não tiver variável PORT, usa 8090)
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8090;
+
+// Pasta de dados do projeto (onde fica data/entrada.json)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 
 // Permite receber JSON no corpo das requisições
 app.use(express.json());
 
-// Caminho da pasta com os arquivos estáticos do Vite (build)
+// Pasta do front (Vite build)
 const DIST_PATH = path.join(__dirname, "dist");
-
-// Servir o front-end já compilado (dist)
-app.use(express.static(DIST_PATH));
-
-// Caminhos ABSOLUTOS dos arquivos gerados pelo backend Python
-const ENTRADA_PATH =
-  "/home/roteiro_ds/autotrader-planilhas-python/data/entrada.json";
-
-const SAIDA_MONITORAMENTO_PATH =
-  "/home/roteiro_ds/autotrader-planilhas-python/saida_monitoramento.json";
-
-const SAIDA_MANUAL_PATH =
-  "/home/roteiro_ds/autotrader-planilhas-python/saida_manual.json";
-
-// --------- FUNÇÕES AUXILIARES ---------
-function lerJsonSeguro(caminho, defaultValue) {
-  try {
-    if (!fs.existsSync(caminho)) {
-      console.warn("[API] Arquivo não encontrado:", caminho);
-      return defaultValue;
-    }
-    const raw = fs.readFileSync(caminho, "utf-8");
-    const parsed = JSON.parse(raw);
-    return parsed;
-  } catch (err) {
-    console.error("[API] Erro ao ler/parsing:", caminho, err);
-    return defaultValue;
-  }
+if (fs.existsSync(DIST_PATH)) {
+  app.use(express.static(DIST_PATH));
 }
 
-function salvarJsonSeguro(caminho, dados) {
+// --------- FUNÇÃO AUXILIAR (SEM ERRO) ---------
+function lerJsonSeguro(arquivo, padrao) {
   try {
-    fs.writeFileSync(caminho, JSON.stringify(dados, null, 2), "utf-8");
-    console.log("[API] Arquivo salvo com sucesso:", caminho);
-    return true;
-  } catch (err) {
-    console.error("[API] Erro ao salvar:", caminho, err);
-    return false;
-  }
-}
-
-// --------- /api/entrada ---------
-app.get("/api/entrada", (req, res) => {
-  const parsed = lerJsonSeguro(ENTRADA_PATH, { swing: [], posicional: [] });
-
-  const swing = Array.isArray(parsed.swing) ? parsed.swing : [];
-  const posicional = Array.isArray(parsed.posicional) ? parsed.posicional : [];
-
-  return res.json({ swing, posicional });
-});
-
-app.get("/api/saida", (req, res) => {
-  try {
-    const PATH = "/home/roteiro_ds/autotrader-planilhas-python/data/saida_monitoramento.json";
-    if (!fs.existsSync(PATH)) {
-      return res.json([]);
+    if (!fs.existsSync(arquivo)) {
+      console.warn("[API] Arquivo não encontrado:", arquivo);
+      return padrao;
     }
-    const raw = fs.readFileSync(PATH);
-    const dados = JSON.parse(raw);
-    return res.json(dados);
+    const raw = fs.readFileSync(arquivo, "utf-8");
+    return JSON.parse(raw);
   } catch (e) {
-    return res.json([]);
+    console.error("[API] Erro ao ler JSON:", arquivo, e.message);
+    return padrao;
   }
+}
+
+// --------- ROTAS ---------
+
+// Health-check
+app.get("/health", (req, res) => {
+  return res.json({ ok: true, app: "Entrada-Posicional", port: PORT });
 });
-// --------- /saida (monitoramento automático - SAÍDA 2) ---------
-app.get("/saida", (req, res) => {
-  const dados = lerJsonSeguro(SAIDA_MONITORAMENTO_PATH, []);
+
+// GET /api/entrada - devolve o JSON inteiro gerado pelo worker
+app.get("/api/entrada", (req, res) => {
+  const file = path.join(DATA_DIR, "entrada.json");
+  const padrao = {
+    swing: [],
+    posicional: [],
+    total_moedas: 0,
+    total_processadas: 0,
+    ultima_atualizacao: null,
+  };
+  const dados = lerJsonSeguro(file, padrao);
   return res.json(dados);
 });
 
-// --------- /saida/manual (entrada manual - SAÍDA 1) ---------
-
-// GET: lista de operações manuais já salvas
-app.get("/saida/manual", (req, res) => {
-  const lista = lerJsonSeguro(SAIDA_MANUAL_PATH, []);
-  return res.json(lista);
-});
-
-// POST: adiciona uma nova operação manual
-app.post("/saida/manual", (req, res) => {
-  const novaOperacao = req.body;
-
-  if (!novaOperacao || typeof novaOperacao !== "object") {
-    return res.status(400).json({ error: "Corpo da requisição inválido." });
-  }
-
-  const listaAtual = lerJsonSeguro(SAIDA_MANUAL_PATH, []);
-
-  if (!Array.isArray(listaAtual)) {
-    return res
-      .status(500)
-      .json({ error: "Formato inválido em saida_manual.json." });
-  }
-
-  listaAtual.push(novaOperacao);
-
-  const ok = salvarJsonSeguro(SAIDA_MANUAL_PATH, listaAtual);
-  if (!ok) {
-    return res.status(500).json({ error: "Falha ao salvar saida_manual.json." });
-  }
-
-  return res.json({ ok: true, total: listaAtual.length });
-});
-
-// --------- ROTA CORINGA: devolve o index.html do Vite ---------
+// ROTA CORINGA: abre o site (se existir dist/index.html)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(DIST_PATH, "index.html"));
+  const indexFile = path.join(DIST_PATH, "index.html");
+  if (fs.existsSync(indexFile)) {
+    return res.sendFile(indexFile);
+  }
+  return res
+    .status(200)
+    .send("Front-end não encontrado (dist/index.html). API está ativa em /api/entrada");
 });
 
 // --------- INICIALIZAÇÃO DO SERVIDOR ---------
-app.listen(PORT, () => {
-  console.log(`Servidor AUTOTRADER rodando na porta ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Servidor ENTRADA rodando na porta ${PORT}`);
+  console.log(`DATA_DIR: ${DATA_DIR}`);
 });

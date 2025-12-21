@@ -3,23 +3,170 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Autotrader</title>
-  <link rel="stylesheet" href="/index.css">
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.2",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0"
-  }
-}
-</script>
+  <title>AUTOTRADER - ENTRADA</title>
+
+  <style>
+    :root{
+      --bg:#0b2533;
+      --panel:#0f2f40;
+      --line:#1b3e52;
+      --text:#e7edf3;
+      --muted:#a8b6c3;
+      --pumpkin:#ff8c2a;
+      --green:#00e676;
+      --red:#ff5252;
+    }
+    body{ margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap{ max-width: 1180px; margin: 18px auto; padding: 0 14px; }
+    .title{ font-size: 26px; font-weight: 800; color: var(--pumpkin); letter-spacing: .5px; }
+    .panel{ margin-top: 14px; background: rgba(0,0,0,.20); border:1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .panelHead{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .panelHead h2{ margin:0; font-size:18px; color: var(--pumpkin); }
+    .updated{ font-size: 12px; color: var(--muted); }
+
+    /* tabela: colunas fixas e menores */
+    table{ width:100%; border-collapse: collapse; table-layout: fixed; }
+    thead th{
+      text-align:left;
+      font-size: 12px;
+      color: var(--pumpkin);
+      padding: 10px 10px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+    }
+    tbody td{
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    tbody tr:hover{ background: rgba(255,255,255,.03); }
+
+    th:nth-child(1), td:nth-child(1){ width:60px; }   /* PAR */
+    th:nth-child(2), td:nth-child(2){ width:120px; }  /* SIDE */
+    th:nth-child(3), td:nth-child(3){ width:100px; }  /* PREÇO */
+    th:nth-child(4), td:nth-child(4){ width:100px; }  /* ALVO */
+    th:nth-child(5), td:nth-child(5){ width:80px; }   /* GANHO % */
+    th:nth-child(6), td:nth-child(6){ width:80px; }   /* ASSERT % */
+    th:nth-child(7), td:nth-child(7){ width:100px; }  /* DATA */
+    th:nth-child(8), td:nth-child(8){ width:96px; }   /* HORA */
+
+    .sideLong{ color: var(--green); font-weight: 800; }
+    .sideShort{ color: var(--red); font-weight: 800; }
+    .sideNE{ color: var(--text); font-weight: 700; }
+    .pos{ color: var(--green); font-weight: 800; }
+    .neg{ color: var(--red); font-weight: 800; }
+  </style>
 </head>
-<body class="bg-[#0b2533] text-[#e7edf3]">
-  <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
+
+<body>
+  <div class="wrap">
+    <div class="title">AUTOTRADER</div>
+
+    <div class="panel">
+      <div class="panelHead">
+        <h2>Painel de Entrada — POSICIONAL (1D)</h2>
+        <div class="updated" id="updated">Dados atualizados às: --:--</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>PAR</th>
+            <th>SIDE</th>
+            <th>PREÇO</th>
+            <th>ALVO</th>
+            <th>GANHO %</th>
+            <th>ASSERT %</th>
+            <th>DATA</th>
+            <th>HORA</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="8" style="color:#a8b6c3;">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function fmtPrice(v){
+      const x = Number(v);
+      if (!isFinite(x) || x === 0) return "0";
+      const ax = Math.abs(x);
+      if (ax >= 1) return x.toFixed(3);
+      if (ax >= 0.01) return x.toFixed(6);
+      if (ax >= 0.0001) return x.toFixed(8);
+      return x.toFixed(10);
+    }
+
+    function fmtPct(v){
+      const x = Number(v);
+      if (!isFinite(x)) return "0.00";
+      return x.toFixed(2);
+    }
+
+    function sideClass(s){
+      if (s === "LONG") return "sideLong";
+      if (s === "SHORT") return "sideShort";
+      return "sideNE";
+    }
+
+    function pctClass(v){
+      const x = Number(v);
+      if (!isFinite(x)) return "";
+      return x >= 0 ? "pos" : "neg";
+    }
+
+    async function loadData(){
+      const tbody = document.getElementById("tbody");
+      try{
+        const r = await fetch("/api/entrada", { cache: "no-store" });
+        const j = await r.json();
+
+        const pos = Array.isArray(j.posicional) ? j.posicional : [];
+        // Atualização (usa o primeiro item ou fallback)
+        const hora = (pos[0] && pos[0].hora) ? pos[0].hora : "--:--";
+        document.getElementById("updated").textContent = "Dados atualizados às: " + hora;
+
+        if (!pos.length){
+          tbody.innerHTML = `<tr><td colspan="8" style="color:#a8b6c3;">Sem dados.</td></tr>`;
+          return;
+        }
+
+        let html = "";
+        for (const row of pos){
+          const par = row.par || "";
+          const side = row.sinal || "NÃO ENTRAR";
+          const preco = fmtPrice(row.preco);
+          const alvo  = fmtPrice(row.alvo);
+          const ganho = fmtPct(row.ganho_pct);
+          const asrt  = fmtPct(row.assert_pct);
+          const data  = row.data || "";
+          const hora2 = row.hora || "";
+
+          html += `
+            <tr>
+              <td>${par}</td>
+              <td class="${sideClass(side)}">${side}</td>
+              <td>${preco}</td>
+              <td>${alvo}</td>
+              <td class="${pctClass(row.ganho_pct)}">${ganho}</td>
+              <td class="${pctClass(row.assert_pct)}">${asrt}</td>
+              <td>${data}</td>
+              <td>${hora2}</td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
+      }catch(e){
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#ffb4b4;">Erro ao carregar API /api/entrada</td></tr>`;
+      }
+    }
+
+    loadData();
+    setInterval(loadData, 30000); // 30s (visual). worker é quem atualiza o JSON.
+  </script>
 </body>
 </html>
